@@ -1,18 +1,20 @@
 'use strict';
 // 탐색기·Source Control 패널의 파일 표시(배지와 색).
+// 색은 이 확장의 색상 ID(svnTools.*, manifest.js의 colors)를 쓴다 — 사용자가 workbench.colorCustomizations로
+// git 색과 따로 바꿀 수 있게. 기본값은 git 색을 그대로 가리킨다.
 const vscode = require('vscode');
 
 const STYLE = {
-  M: { badge: 'M', color: 'gitDecoration.modifiedResourceForeground', tip: 'Modified', propagate: true },
-  R: { badge: 'R', color: 'gitDecoration.modifiedResourceForeground', tip: 'Replaced', propagate: true },
-  A: { badge: 'A', color: 'gitDecoration.addedResourceForeground', tip: 'Added', propagate: true },
-  D: { badge: 'D', color: 'gitDecoration.deletedResourceForeground', tip: 'Deleted', propagate: true },
-  '!': { badge: '!', color: 'gitDecoration.deletedResourceForeground', tip: 'Missing', propagate: true },
-  C: { badge: 'C', color: 'gitDecoration.conflictingResourceForeground', tip: 'Conflict', propagate: true },
-  '~': { badge: '~', color: 'gitDecoration.conflictingResourceForeground', tip: 'Obstructed', propagate: true },
-  '?': { badge: 'U', color: 'gitDecoration.untrackedResourceForeground', tip: 'Unversioned', propagate: false },
-  // 무시된 파일은 배지 없이 회색만. 무시된 폴더 안의 파일도 Repository.statusOf가 'I'를 돌려준다.
-  I: { badge: undefined, color: 'gitDecoration.ignoredResourceForeground', tip: 'Ignored', propagate: false },
+  M: { badge: 'M', color: 'svnTools.modifiedForeground', tip: 'Modified', propagate: true },
+  R: { badge: 'R', color: 'svnTools.modifiedForeground', tip: 'Replaced', propagate: true },
+  A: { badge: 'A', color: 'svnTools.addedForeground', tip: 'Added', propagate: true },
+  D: { badge: 'D', color: 'svnTools.deletedForeground', tip: 'Deleted', propagate: true },
+  '!': { badge: '!', color: 'svnTools.deletedForeground', tip: 'Missing', propagate: true },
+  C: { badge: 'C', color: 'svnTools.conflictedForeground', tip: 'Conflict', propagate: true },
+  '~': { badge: '~', color: 'svnTools.conflictedForeground', tip: 'Obstructed', propagate: true },
+  '?': { badge: 'U', color: 'svnTools.unversionedForeground', tip: 'Unversioned', propagate: false },
+  // 무시된 파일은 배지 없이 색만. 무시된 폴더 안의 파일도 Repository.statusOf가 'I'를 돌려준다.
+  I: { badge: undefined, color: 'svnTools.ignoredForeground', tip: 'Ignored', propagate: false },
 };
 
 class DecorationProvider {

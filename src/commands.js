@@ -7,8 +7,9 @@ const svn = require('./svn');
 const ignore = require('./ignore');
 const tortoise = require('./tortoise');
 const { t } = require('./i18n');
-const { baseUri, isInside } = require('./repository');
+const { baseUri, isInside, key } = require('./repository');
 const { IgnoreView } = require('./ignoreView');
+const { ReasonView } = require('./reasonView');
 
 function createCommands(ctx) {
   // ---- 공통 ----
@@ -33,8 +34,9 @@ function createCommands(ctx) {
     return [];
   }
 
+  // svn에 넘길 경로는 디스크 표기(대소문자)로 맞춘다 — svn.realPath 설명 참고.
   function paths(args) {
-    return toUris(args).map((u) => u.fsPath);
+    return toUris(args).map((u) => svn.realPath(u.fsPath));
   }
 
   function repoFor(p) {
@@ -146,8 +148,10 @@ function createCommands(ctx) {
       }
     }
 
-    const { stdout } = await step('commit', () => svn.withTempFile(message, (file) =>
-      svn.exec(['commit', '-F', file, '--encoding', 'utf-8', ...targets], repo.folder)));
+    // 메시지는 -m 인자로 넘긴다(-F + --encoding은 한글 경로를 깨뜨린다, svn.js의 exec 설명 참고).
+    // --force-log: 메시지가 우연히 파일 경로와 같아도 svn이 거부하지 않게 한다.
+    const { stdout } = await step('commit', () =>
+      svn.exec(['commit', '-m', message, '--force-log', ...targets], repo.folder));
     ctx.output.appendLine(stdout);
     repo.sourceControl.inputBox.value = '';
     const rev = svn.lastRevision(stdout);
@@ -173,7 +177,7 @@ function createCommands(ctx) {
   // ---- 비교·열기 ----
 
   async function diffBase(uri) {
-    const p = uri.fsPath;
+    const p = svn.realPath(uri.fsPath);
     const repo = repoFor(p);
     if (!repo) return;
     if (isDir(p)) return showTextDiff(repo, [p]);
@@ -201,7 +205,7 @@ function createCommands(ctx) {
     if (!repo) return;
     const code = repo.statusOf(uri.fsPath);
     if (code === 'M' || code === 'R' || code === 'C') return diffBase(uri);
-    if (code === 'D' || code === '!') return vscode.window.showTextDocument(baseUri(uri.fsPath, 'BASE'), { preview: true });
+    if (code === 'D' || code === '!') return vscode.window.showTextDocument(baseUri(svn.realPath(uri.fsPath), 'BASE'), { preview: true });
     return vscode.window.showTextDocument(uri, { preview: true });
   }
 
@@ -215,7 +219,7 @@ function createCommands(ctx) {
   }
 
   async function showLog(uri) {
-    const p = uri.fsPath;
+    const p = svn.realPath(uri.fsPath);
     const repo = repoFor(p);
     if (!repo) return;
     let entries = await step('log', () => fetchLog(repo, p));
@@ -400,7 +404,7 @@ function createCommands(ctx) {
     rename: command(async (...args) => {
       const [uri] = toUris(args);
       if (!uri) return vscode.window.showWarningMessage(t('noSelection'));
-      const p = uri.fsPath;
+      const p = svn.realPath(uri.fsPath);
       const repo = repoFor(p);
       if (!repo) return;
       if (['?', 'I'].includes(repo.statusOf(p))) return vscode.window.showWarningMessage(t('renameUnversioned'));
@@ -423,19 +427,24 @@ function createCommands(ctx) {
     ignore: command(async (...args) => {
       const [uri] = toUris(args);
       if (!uri) return vscode.window.showWarningMessage(t('noSelection'));
-      const p = uri.fsPath;
+      const p = svn.realPath(uri.fsPath);
       const repo = repoFor(p);
       if (!repo) return;
       const name = path.basename(p);
       const ext = !isDir(p) && path.extname(name) ? `*${path.extname(name)}` : undefined;
-      const whatItems = [{ label: t('ignoreWhatName', name), value: name }];
+      // 패턴에는 공백을 쓰지 않는다 — 이름에 공백이 있으면 ?(아무 한 글자)로 바꿔 같은 이름에 맞게 한다.
+      const safeName = name.replace(/\s/g, '?');
+      const whatItems = [{ label: t('ignoreWhatName', safeName), value: safeName }];
       if (ext) whatItems.push({ label: t('ignoreWhatExt', ext), value: ext });
       whatItems.push({ label: t('ignoreWhatCustom'), custom: true });
       const what = await vscode.window.showQuickPick(whatItems, { title: t('ignoreWhatTitle') });
       if (!what) return;
       let pattern = what.value;
       if (what.custom) {
-        pattern = await vscode.window.showInputBox({ prompt: t('ignoreCustomPrompt'), value: name });
+        pattern = await vscode.window.showInputBox({
+          prompt: t('ignoreCustomPrompt'), value: name.replace(/\s/g, '?'),
+          validateInput: (v) => (/\s/.test(v.trim()) ? t('viewInvalidPattern') : undefined),
+        });
         if (!pattern || !pattern.trim()) return;
         pattern = pattern.trim();
       }
@@ -463,6 +472,19 @@ function createCommands(ctx) {
       }
       const added = await ignore.addToProp(kind.prop, kind.dir, pattern);
       vscode.window.showInformationMessage(added ? t('ignoreDoneProp', `${kind.prop} (${path.basename(kind.dir)})`, pattern) : t('ignoreAlready', pattern));
+    }),
+
+    // 무시된 원인 보기. 원인 규칙을 카드로 보여 주고 고칠 수 있는 규칙은 거기서 지운다(reasonView.js).
+    ignoreReason: command(async (...args) => {
+      const [p] = paths(args);
+      if (!p) return vscode.window.showWarningMessage(t('noSelection'));
+      const repo = repoFor(p);
+      if (!repo) return;
+      await repo.refresh();
+      if (!repo.ignored.some((ig) => isInside(p, ig))) {
+        return vscode.window.showInformationMessage(t('unignoreNotIgnored', path.basename(p)));
+      }
+      ReasonView.show(repo, p, () => ctx.refreshAll());
     }),
 
     // 무시 목록 편집 화면. 폴더에서 열면 그 폴더, 파일에서 열면 그 파일의 폴더를 먼저 보여 준다.
@@ -520,9 +542,16 @@ function createCommands(ctx) {
     copyUrl: command(async (...args) => {
       const [uri] = toUris(args);
       if (!uri) return vscode.window.showWarningMessage(t('noSelection'));
-      const { stdout } = await svn.exec(['info', '--xml', uri.fsPath], path.dirname(uri.fsPath));
-      const { url } = svn.parseInfo(stdout);
+      const p = svn.realPath(uri.fsPath);
+      const { stdout } = await svn.exec(['info', '--xml', p], path.dirname(p));
+      let { url } = svn.parseInfo(stdout);
       if (!url) return;
+      // svn은 한글을 %XX로 인코딩해 준다. 사람이 읽게 풀어서 복사한다(svn도 풀린 주소를 받는다).
+      try {
+        url = decodeURI(url);
+      } catch {
+        // 풀 수 없는 주소면 그대로 쓴다.
+      }
       await vscode.env.clipboard.writeText(url);
       vscode.window.showInformationMessage(t('copyUrlDone', url));
     }),

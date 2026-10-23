@@ -3,3 +3,5 @@ manifest.js
 .vscode/**
 .git/**
 .gitignore
+test/**
+CLAUDE.md

@@ -38,9 +38,9 @@ function codeOf(entry) {
 
 class Repository {
   constructor(folder, info, onDidChange) {
-    this.folder = folder.uri.fsPath;
+    this.folder = svn.realPath(folder.uri.fsPath);
     this.name = folder.name;
-    this.wcRoot = info.wcRoot ? path.normalize(info.wcRoot) : this.folder;
+    this.wcRoot = info.wcRoot ? svn.realPath(path.normalize(info.wcRoot)) : this.folder;
     this.url = info.url;
     this.statuses = new Map();   // key(path) → { path, code }
     this.ignored = [];           // 무시된 경로(폴더면 그 아래도 무시)
@@ -80,10 +80,11 @@ class Repository {
     this.disposables.push(watcher);
   }
 
+  // 그룹 이름은 svn 상태 이름이라 메뉴처럼 영어로 고정한다. 입력칸 안내만 설정 언어를 따른다.
   applyLanguage() {
-    this.conflicts.label = t('groupConflicts');
-    this.changes.label = t('groupChanges');
-    this.unversioned.label = t('groupUnversioned');
+    this.conflicts.label = 'Conflicts';
+    this.changes.label = 'Changes';
+    this.unversioned.label = 'Unversioned';
     this.sourceControl.inputBox.placeholder = t('commitPlaceholder');
   }
 
@@ -162,10 +163,11 @@ class Repository {
   resourceState(p, code) {
     const uri = vscode.Uri.file(p);
     const deleted = code === 'D' || code === '!';
+    const fade = vscode.workspace.getConfiguration('svnTools').get('scm.fadeUnversioned', true);
     return {
       resourceUri: uri,
       contextValue: CONTEXT_VALUE[code] || 'modified',
-      decorations: { strikeThrough: deleted, faded: code === '?', tooltip: code },
+      decorations: { strikeThrough: deleted, faded: fade && code === '?', tooltip: code },
       command: { command: 'svnTools.openChange', title: 'Open', arguments: [uri] },
     };
   }

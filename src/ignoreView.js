@@ -7,17 +7,20 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const ignore = require('./ignore');
+const tortoise = require('./tortoise');
+const svn = require('./svn');
 const { t } = require('./i18n');
 const { isInside } = require('./repository');
 
 const PROPS = ['svn:ignore', 'svn:global-ignores'];
+const SOURCE_KEY = { userFile: 'sourceUserFile', userRegistry: 'sourceUserRegistry', systemFile: 'sourceSystemFile', systemRegistry: 'sourceSystemRegistry', default: 'sourceDefault' };
 const STRING_KEYS = [
   'viewTitle', 'viewProjectSection', 'viewProjectHelp', 'viewNoRules', 'viewFolder', 'viewKind', 'viewPattern',
   'viewAdd', 'viewEdit', 'viewRemove', 'viewSave', 'viewCancel', 'viewRefresh', 'viewRoot', 'viewUncommitted',
   'viewLocalSection', 'viewLocalHelp', 'viewLocalDefault', 'viewInvalidPattern', 'viewSaveAll', 'viewDiscard',
   'viewUnsaved', 'viewNoChanges', 'viewOtherFolder', 'viewOtherFolderHelp', 'viewCreateCard', 'viewRestore',
   'viewAddedTag', 'viewEditedTag', 'viewRemovedTag', 'viewNewCardTag', 'viewHintIgnore', 'viewHintGlobal',
-  'viewEmptyCard', 'viewRemoveCard', 'viewRemoveAll', 'viewRestoreAll',
+  'viewEmptyCard', 'viewRemoveCard', 'viewRemoveAll', 'viewRestoreAll', 'patternHelp', 'openTortoiseSettings',
 ];
 
 let current; // 화면은 하나만 연다
@@ -87,7 +90,8 @@ class IgnoreView {
     const local = ignore.readLocal();
     const strings = Object.fromEntries(STRING_KEYS.map((k) => [k, t(k)]));
     strings.viewProjectSection = t('viewProjectSection', this.repo.name);
-    strings.viewLocalHelp = t('viewLocalHelp', ignore.configPath());
+    const target = ignore.localWriteTarget() === 'userFile' ? t('sourceUserFile') : t('targetUserRegistry');
+    strings.viewLocalDefault = t('viewLocalDefault', t(SOURCE_KEY[local.source]), target);
     return { rules, focus: this.rel(this.focusDir), local: { set: !!local.set, patterns: local.patterns }, strings };
   }
 
@@ -107,7 +111,7 @@ class IgnoreView {
     if (!isInside(dir, this.repo.folder)) throw new Error(t('viewOutside', relDir));
     if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) throw new Error(t('viewFolderNotFound', relDir));
     if (['?', 'I'].includes(this.repo.statusOf(dir))) throw new Error(t('viewFolderNotVersioned', relDir));
-    return dir;
+    return svn.realPath(dir);
   }
 
   async save(changes, local) {
@@ -138,6 +142,10 @@ class IgnoreView {
   }
 
   async handle(m) {
+    if (m.op === 'tortoise') {
+      tortoise.open('settings', [], () => { if (!this.dirty) this.render(); });
+      return;
+    }
     if (m.op === 'dirty') {
       this.dirty = !!m.value;
       return;
@@ -169,6 +177,7 @@ class IgnoreView {
   .bar .status.dirty { color: var(--vscode-editorWarning-foreground); font-weight: 600; }
   h2 { font-size: 1.1em; margin-top: 28px; border-bottom: 1px solid var(--vscode-panel-border); padding-bottom: 6px; }
   .help { color: var(--vscode-descriptionForeground); margin: 6px 0 12px; }
+  .help.pattern { margin-top: 10px; padding: 6px 10px; border-left: 3px solid var(--vscode-textBlockQuote-border); }
   .card { border: 1px solid var(--vscode-panel-border); border-radius: 4px; margin: 10px 0; }
   .card.focus { border-color: var(--vscode-focusBorder); }
   .card-head { padding: 6px 10px; background: var(--vscode-sideBarSectionHeader-background); display: flex; gap: 8px; align-items: center; }
@@ -348,6 +357,8 @@ function render() {
     el('button', { disabled: !n, on: { click: () => { loadState(S); render(); } } }, L.viewDiscard),
     el('button', { disabled: !!n, on: { click: () => send({ op: 'refresh' }) } }, L.viewRefresh)));
 
+  root.append(el('div', { class: 'help pattern' }, L.patternHelp));
+
   // ---- 프로젝트 규칙 ----
   root.append(el('h2', {}, L.viewProjectSection), el('div', { class: 'help' }, L.viewProjectHelp));
   if (cards.length === 0) root.append(el('div', { class: 'empty' }, L.viewNoRules));
@@ -388,7 +399,8 @@ function render() {
 
   // ---- 내 PC 전역 ----
   root.append(el('h2', {}, L.viewLocalSection), el('div', { class: 'help' }, L.viewLocalHelp));
-  if (!S.local.set) root.append(el('div', { class: 'help' }, L.viewLocalDefault));
+  root.append(el('div', { class: 'help' }, L.viewLocalDefault,
+    ' ', el('button', { on: { click: () => send({ op: 'tortoise' }) } }, L.openTortoiseSettings)));
   const box = el('div', { class: 'card' });
   for (const item of local) box.append(itemRow(local, item));
   box.append(addRow(local));

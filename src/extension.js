@@ -5,7 +5,6 @@ const { Repository } = require('./repository');
 const { DecorationProvider } = require('./decorations');
 const { createCommands } = require('./commands');
 const { COMMANDS: TORTOISE_COMMANDS } = require('./tortoise');
-const { LANGUAGES } = require('./languages');
 
 let repositories = [];
 
@@ -21,7 +20,8 @@ function activate(context) {
   async function openFolder(folder) {
     if (folder.uri.scheme !== 'file') return;
     try {
-      const { stdout } = await svn.exec(['info', '--xml', folder.uri.fsPath], folder.uri.fsPath);
+      const dir = svn.realPath(folder.uri.fsPath);
+      const { stdout } = await svn.exec(['info', '--xml', dir], dir);
       const repo = new Repository(folder, svn.parseInfo(stdout), () => decorations.refresh());
       repositories.push(repo);
       await repo.refresh();
@@ -33,7 +33,7 @@ function activate(context) {
   }
 
   function closeFolder(folder) {
-    const p = folder.uri.fsPath;
+    const p = svn.realPath(folder.uri.fsPath);
     repositories.filter((r) => r.folder === p).forEach((r) => r.dispose());
     repositories = repositories.filter((r) => r.folder !== p);
     updateContext();
@@ -55,7 +55,8 @@ function activate(context) {
     async provideTextDocumentContent(uri) {
       try {
         const { p, r } = JSON.parse(uri.query);
-        const { stdout } = await svn.exec(['cat', '-r', r, p], require('path').dirname(p));
+        const file = svn.realPath(p);
+        const { stdout } = await svn.exec(['cat', '-r', r, file], require('path').dirname(file));
         return stdout;
       } catch {
         return '';
@@ -63,15 +64,9 @@ function activate(context) {
     },
   }));
 
-  // ---- 명령: 같은 처리를 기본 ID와 언어별 ID(.ko/.en) 모두에 묶는다 ----
-  // 메뉴 이름은 package.json에 고정이라, 설정 언어에 맞는 쪽 ID만 메뉴에 보이게 manifest.js가 나눠 둔다.
+  // ---- 명령 (메뉴 이름은 영어 고정, manifest.js) ----
   const handlers = createCommands(ctx);
-  const register = (id, fn) => {
-    context.subscriptions.push(vscode.commands.registerCommand(`svnTools.${id}`, fn));
-    for (const lang of LANGUAGES) {
-      context.subscriptions.push(vscode.commands.registerCommand(`svnTools.${id}.${lang}`, fn));
-    }
-  };
+  const register = (id, fn) => context.subscriptions.push(vscode.commands.registerCommand(`svnTools.${id}`, fn));
   for (const [id, fn] of Object.entries(handlers)) {
     if (id !== 'tortoise') register(id, fn);
   }
@@ -90,6 +85,7 @@ function activate(context) {
 
   context.subscriptions.push(vscode.workspace.onDidChangeConfiguration((e) => {
     if (e.affectsConfiguration('svnTools.language')) repositories.forEach((r) => r.applyLanguage());
+    if (e.affectsConfiguration('svnTools.scm')) refreshAll();
     if (e.affectsConfiguration('svnTools')) decorations.refresh();
   }));
 }
