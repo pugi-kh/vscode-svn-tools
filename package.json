@@ -2,7 +2,7 @@
   "name": "vscode-svn-tools",
   "displayName": "SVN Tools",
   "description": "SVN Source Control panel, explorer context menu (SVN / TortoiseSVN) and status decorations including ignored files.",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "publisher": "khoon",
   "license": "MIT",
   "repository": {
@@ -29,220 +29,451 @@
   "main": "./src/extension.js",
   "scripts": {
     "manifest": "node manifest.js",
-    "test": "node test/svn-paths.js",
+    "test": "node manifest.js && node test/svn-paths.js && node test/manifest-check.js",
     "package": "node manifest.js && npx --yes @vscode/vsce package"
   },
   "contributes": {
     "commands": [
       {
-        "command": "svnTools.refresh",
+        "command": "svnTools.refresh.en",
         "title": "Refresh",
         "category": "SVN",
         "icon": "$(refresh)"
       },
       {
-        "command": "svnTools.commitAll",
+        "command": "svnTools.commitAll.en",
         "title": "Commit",
         "category": "SVN",
         "icon": "$(check)"
       },
       {
-        "command": "svnTools.commit",
-        "title": "Commit…",
+        "command": "svnTools.commit.en",
+        "title": "SVN Commit…",
         "category": "SVN"
       },
       {
-        "command": "svnTools.update",
-        "title": "Update",
+        "command": "svnTools.update.en",
+        "title": "SVN Update",
         "category": "SVN",
         "icon": "$(arrow-down)"
       },
       {
-        "command": "svnTools.diff",
+        "command": "svnTools.add.en",
+        "title": "SVN Add",
+        "category": "SVN",
+        "icon": "$(add)"
+      },
+      {
+        "command": "svnTools.ignore.en",
+        "title": "SVN Ignore…",
+        "category": "SVN"
+      },
+      {
+        "command": "svnTools.diff.en",
         "title": "Compare with BASE",
         "category": "SVN",
         "icon": "$(diff)"
       },
       {
-        "command": "svnTools.openFile",
+        "command": "svnTools.diffRevision.en",
+        "title": "Compare with Revision…",
+        "category": "SVN"
+      },
+      {
+        "command": "svnTools.openFile.en",
         "title": "Open File",
         "category": "SVN",
         "icon": "$(go-to-file)"
       },
       {
-        "command": "svnTools.revert",
+        "command": "svnTools.revert.en",
         "title": "Revert",
         "category": "SVN",
         "icon": "$(discard)"
       },
       {
-        "command": "svnTools.revertAll",
+        "command": "svnTools.revertAll.en",
         "title": "Revert All",
         "category": "SVN",
         "icon": "$(discard)"
       },
       {
-        "command": "svnTools.add",
-        "title": "Add",
-        "category": "SVN",
-        "icon": "$(add)"
-      },
-      {
-        "command": "svnTools.addAll",
+        "command": "svnTools.addAll.en",
         "title": "Add All",
         "category": "SVN",
         "icon": "$(add)"
       },
       {
-        "command": "svnTools.delete",
-        "title": "Delete",
+        "command": "svnTools.deleteKeepLocal.en",
+        "title": "Keep Local File",
         "category": "SVN"
       },
       {
-        "command": "svnTools.rename",
+        "command": "svnTools.deleteLocal.en",
+        "title": "Delete Local File Too",
+        "category": "SVN"
+      },
+      {
+        "command": "svnTools.rename.en",
         "title": "Rename (keep history)",
         "category": "SVN"
       },
       {
-        "command": "svnTools.ignore",
-        "title": "Add to Ignore List…",
-        "category": "SVN"
-      },
-      {
-        "command": "svnTools.ignoreReason",
+        "command": "svnTools.ignoreReason.en",
         "title": "Show Ignore Reason…",
         "category": "SVN"
       },
       {
-        "command": "svnTools.editIgnores",
+        "command": "svnTools.editIgnores.en",
         "title": "Edit Ignore Lists…",
         "category": "SVN",
         "icon": "$(eye-closed)"
       },
       {
-        "command": "svnTools.log",
+        "command": "svnTools.log.en",
         "title": "Show Log",
         "category": "SVN",
         "icon": "$(history)"
       },
       {
-        "command": "svnTools.resolve",
+        "command": "svnTools.resolve.en",
         "title": "Resolve Conflict…",
         "category": "SVN"
       },
       {
-        "command": "svnTools.cleanup",
+        "command": "svnTools.cleanup.en",
         "title": "Clean Up",
         "category": "SVN"
       },
       {
-        "command": "svnTools.copyUrl",
+        "command": "svnTools.copyUrl.en",
         "title": "Copy SVN URL",
         "category": "SVN"
       },
       {
-        "command": "svnTools.tortoise.update",
+        "command": "svnTools.tortoise.update.en",
         "title": "Update",
         "category": "TortoiseSVN"
       },
       {
-        "command": "svnTools.tortoise.commit",
+        "command": "svnTools.tortoise.commit.en",
         "title": "Commit",
         "category": "TortoiseSVN"
       },
       {
-        "command": "svnTools.tortoise.log",
+        "command": "svnTools.tortoise.log.en",
         "title": "Show Log",
         "category": "TortoiseSVN"
       },
       {
-        "command": "svnTools.tortoise.diff",
+        "command": "svnTools.tortoise.diff.en",
         "title": "Diff",
         "category": "TortoiseSVN"
       },
       {
-        "command": "svnTools.tortoise.revisiongraph",
+        "command": "svnTools.tortoise.revisiongraph.en",
         "title": "Revision Graph",
         "category": "TortoiseSVN"
       },
       {
-        "command": "svnTools.tortoise.repobrowser",
+        "command": "svnTools.tortoise.repobrowser.en",
         "title": "Repo-browser",
         "category": "TortoiseSVN"
       },
       {
-        "command": "svnTools.tortoise.blame",
+        "command": "svnTools.tortoise.blame.en",
         "title": "Blame",
         "category": "TortoiseSVN"
       },
       {
-        "command": "svnTools.tortoise.add",
+        "command": "svnTools.tortoise.add.en",
         "title": "Add",
         "category": "TortoiseSVN"
       },
       {
-        "command": "svnTools.tortoise.remove",
+        "command": "svnTools.tortoise.remove.en",
         "title": "Delete",
         "category": "TortoiseSVN"
       },
       {
-        "command": "svnTools.tortoise.rename",
+        "command": "svnTools.tortoise.rename.en",
         "title": "Rename",
         "category": "TortoiseSVN"
       },
       {
-        "command": "svnTools.tortoise.revert",
+        "command": "svnTools.tortoise.revert.en",
         "title": "Revert",
         "category": "TortoiseSVN"
       },
       {
-        "command": "svnTools.tortoise.conflicteditor",
+        "command": "svnTools.tortoise.conflicteditor.en",
         "title": "Edit Conflicts",
         "category": "TortoiseSVN"
       },
       {
-        "command": "svnTools.tortoise.resolve",
+        "command": "svnTools.tortoise.resolve.en",
         "title": "Resolved",
         "category": "TortoiseSVN"
       },
       {
-        "command": "svnTools.tortoise.ignore",
+        "command": "svnTools.tortoise.ignore.en",
         "title": "Add to Ignore List",
         "category": "TortoiseSVN"
       },
       {
-        "command": "svnTools.tortoise.properties",
+        "command": "svnTools.tortoise.properties.en",
         "title": "Properties",
         "category": "TortoiseSVN"
       },
       {
-        "command": "svnTools.tortoise.merge",
+        "command": "svnTools.tortoise.merge.en",
         "title": "Merge",
         "category": "TortoiseSVN"
       },
       {
-        "command": "svnTools.tortoise.switch",
+        "command": "svnTools.tortoise.switch.en",
         "title": "Switch",
         "category": "TortoiseSVN"
       },
       {
-        "command": "svnTools.tortoise.lock",
+        "command": "svnTools.tortoise.lock.en",
         "title": "Get Lock",
         "category": "TortoiseSVN"
       },
       {
-        "command": "svnTools.tortoise.unlock",
+        "command": "svnTools.tortoise.unlock.en",
         "title": "Release Lock",
         "category": "TortoiseSVN"
       },
       {
-        "command": "svnTools.tortoise.cleanup",
+        "command": "svnTools.tortoise.cleanup.en",
         "title": "Clean Up",
         "category": "TortoiseSVN"
       },
       {
-        "command": "svnTools.tortoise.settings",
+        "command": "svnTools.tortoise.settings.en",
         "title": "Settings",
+        "category": "TortoiseSVN"
+      },
+      {
+        "command": "svnTools.refresh.ko",
+        "title": "새로고침",
+        "category": "SVN",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "svnTools.commitAll.ko",
+        "title": "커밋",
+        "category": "SVN",
+        "icon": "$(check)"
+      },
+      {
+        "command": "svnTools.commit.ko",
+        "title": "SVN 커밋…",
+        "category": "SVN"
+      },
+      {
+        "command": "svnTools.update.ko",
+        "title": "SVN 업데이트",
+        "category": "SVN",
+        "icon": "$(arrow-down)"
+      },
+      {
+        "command": "svnTools.add.ko",
+        "title": "SVN 추가",
+        "category": "SVN",
+        "icon": "$(add)"
+      },
+      {
+        "command": "svnTools.ignore.ko",
+        "title": "SVN 무시 목록에 추가…",
+        "category": "SVN"
+      },
+      {
+        "command": "svnTools.diff.ko",
+        "title": "BASE와 비교",
+        "category": "SVN",
+        "icon": "$(diff)"
+      },
+      {
+        "command": "svnTools.diffRevision.ko",
+        "title": "리비전과 비교…",
+        "category": "SVN"
+      },
+      {
+        "command": "svnTools.openFile.ko",
+        "title": "파일 열기",
+        "category": "SVN",
+        "icon": "$(go-to-file)"
+      },
+      {
+        "command": "svnTools.revert.ko",
+        "title": "되돌리기",
+        "category": "SVN",
+        "icon": "$(discard)"
+      },
+      {
+        "command": "svnTools.revertAll.ko",
+        "title": "모두 되돌리기",
+        "category": "SVN",
+        "icon": "$(discard)"
+      },
+      {
+        "command": "svnTools.addAll.ko",
+        "title": "모두 추가",
+        "category": "SVN",
+        "icon": "$(add)"
+      },
+      {
+        "command": "svnTools.deleteKeepLocal.ko",
+        "title": "로컬 파일은 유지",
+        "category": "SVN"
+      },
+      {
+        "command": "svnTools.deleteLocal.ko",
+        "title": "로컬 파일도 삭제",
+        "category": "SVN"
+      },
+      {
+        "command": "svnTools.rename.ko",
+        "title": "이름 바꾸기 (이력 유지)",
+        "category": "SVN"
+      },
+      {
+        "command": "svnTools.ignoreReason.ko",
+        "title": "무시된 원인 보기…",
+        "category": "SVN"
+      },
+      {
+        "command": "svnTools.editIgnores.ko",
+        "title": "무시 목록 편집…",
+        "category": "SVN",
+        "icon": "$(eye-closed)"
+      },
+      {
+        "command": "svnTools.log.ko",
+        "title": "로그 보기",
+        "category": "SVN",
+        "icon": "$(history)"
+      },
+      {
+        "command": "svnTools.resolve.ko",
+        "title": "충돌 해결…",
+        "category": "SVN"
+      },
+      {
+        "command": "svnTools.cleanup.ko",
+        "title": "정리 (Cleanup)",
+        "category": "SVN"
+      },
+      {
+        "command": "svnTools.copyUrl.ko",
+        "title": "SVN URL 복사",
+        "category": "SVN"
+      },
+      {
+        "command": "svnTools.tortoise.update.ko",
+        "title": "업데이트",
+        "category": "TortoiseSVN"
+      },
+      {
+        "command": "svnTools.tortoise.commit.ko",
+        "title": "커밋",
+        "category": "TortoiseSVN"
+      },
+      {
+        "command": "svnTools.tortoise.log.ko",
+        "title": "로그 보기",
+        "category": "TortoiseSVN"
+      },
+      {
+        "command": "svnTools.tortoise.diff.ko",
+        "title": "비교",
+        "category": "TortoiseSVN"
+      },
+      {
+        "command": "svnTools.tortoise.revisiongraph.ko",
+        "title": "리비전 그래프",
+        "category": "TortoiseSVN"
+      },
+      {
+        "command": "svnTools.tortoise.repobrowser.ko",
+        "title": "저장소 탐색기",
+        "category": "TortoiseSVN"
+      },
+      {
+        "command": "svnTools.tortoise.blame.ko",
+        "title": "Blame",
+        "category": "TortoiseSVN"
+      },
+      {
+        "command": "svnTools.tortoise.add.ko",
+        "title": "추가",
+        "category": "TortoiseSVN"
+      },
+      {
+        "command": "svnTools.tortoise.remove.ko",
+        "title": "삭제",
+        "category": "TortoiseSVN"
+      },
+      {
+        "command": "svnTools.tortoise.rename.ko",
+        "title": "이름 바꾸기",
+        "category": "TortoiseSVN"
+      },
+      {
+        "command": "svnTools.tortoise.revert.ko",
+        "title": "되돌리기",
+        "category": "TortoiseSVN"
+      },
+      {
+        "command": "svnTools.tortoise.conflicteditor.ko",
+        "title": "충돌 편집",
+        "category": "TortoiseSVN"
+      },
+      {
+        "command": "svnTools.tortoise.resolve.ko",
+        "title": "해결됨으로 표시",
+        "category": "TortoiseSVN"
+      },
+      {
+        "command": "svnTools.tortoise.ignore.ko",
+        "title": "무시 목록에 추가",
+        "category": "TortoiseSVN"
+      },
+      {
+        "command": "svnTools.tortoise.properties.ko",
+        "title": "속성",
+        "category": "TortoiseSVN"
+      },
+      {
+        "command": "svnTools.tortoise.merge.ko",
+        "title": "병합",
+        "category": "TortoiseSVN"
+      },
+      {
+        "command": "svnTools.tortoise.switch.ko",
+        "title": "전환",
+        "category": "TortoiseSVN"
+      },
+      {
+        "command": "svnTools.tortoise.lock.ko",
+        "title": "잠금",
+        "category": "TortoiseSVN"
+      },
+      {
+        "command": "svnTools.tortoise.unlock.ko",
+        "title": "잠금 해제",
+        "category": "TortoiseSVN"
+      },
+      {
+        "command": "svnTools.tortoise.cleanup.ko",
+        "title": "정리",
+        "category": "TortoiseSVN"
+      },
+      {
+        "command": "svnTools.tortoise.settings.ko",
+        "title": "설정",
         "category": "TortoiseSVN"
       }
     ],
@@ -310,470 +541,1108 @@
     ],
     "submenus": [
       {
-        "id": "svnTools.svn",
+        "id": "svnTools.svn.en",
         "label": "SVN"
       },
       {
-        "id": "svnTools.tortoise",
+        "id": "svnTools.tortoise.en",
         "label": "TortoiseSVN"
+      },
+      {
+        "id": "svnTools.delete.en",
+        "label": "Delete"
+      },
+      {
+        "id": "svnTools.svn.ko",
+        "label": "SVN"
+      },
+      {
+        "id": "svnTools.tortoise.ko",
+        "label": "TortoiseSVN"
+      },
+      {
+        "id": "svnTools.delete.ko",
+        "label": "SVN에서 삭제"
       }
     ],
     "menus": {
       "explorer/context": [
         {
-          "submenu": "svnTools.svn",
+          "command": "svnTools.update.en",
           "group": "7_svn@1",
-          "when": "svnTools.active"
+          "when": "config.svnTools.menuLanguage == 'en' && svnTools.active"
         },
         {
-          "submenu": "svnTools.tortoise",
+          "command": "svnTools.update.ko",
+          "group": "7_svn@1",
+          "when": "config.svnTools.menuLanguage == 'ko' && svnTools.active"
+        },
+        {
+          "command": "svnTools.commit.en",
           "group": "7_svn@2",
-          "when": "svnTools.active"
+          "when": "config.svnTools.menuLanguage == 'en' && svnTools.active"
+        },
+        {
+          "command": "svnTools.commit.ko",
+          "group": "7_svn@2",
+          "when": "config.svnTools.menuLanguage == 'ko' && svnTools.active"
+        },
+        {
+          "command": "svnTools.add.en",
+          "group": "7_svn@3",
+          "when": "config.svnTools.menuLanguage == 'en' && svnTools.active"
+        },
+        {
+          "command": "svnTools.add.ko",
+          "group": "7_svn@3",
+          "when": "config.svnTools.menuLanguage == 'ko' && svnTools.active"
+        },
+        {
+          "command": "svnTools.ignore.en",
+          "group": "7_svn@4",
+          "when": "config.svnTools.menuLanguage == 'en' && svnTools.active"
+        },
+        {
+          "command": "svnTools.ignore.ko",
+          "group": "7_svn@4",
+          "when": "config.svnTools.menuLanguage == 'ko' && svnTools.active"
+        },
+        {
+          "submenu": "svnTools.svn.en",
+          "group": "7_svn@5",
+          "when": "config.svnTools.menuLanguage == 'en' && svnTools.active"
+        },
+        {
+          "submenu": "svnTools.svn.ko",
+          "group": "7_svn@5",
+          "when": "config.svnTools.menuLanguage == 'ko' && svnTools.active"
+        },
+        {
+          "submenu": "svnTools.tortoise.en",
+          "group": "7_svn@6",
+          "when": "config.svnTools.menuLanguage == 'en' && svnTools.active"
+        },
+        {
+          "submenu": "svnTools.tortoise.ko",
+          "group": "7_svn@6",
+          "when": "config.svnTools.menuLanguage == 'ko' && svnTools.active"
         }
       ],
       "editor/title/context": [
         {
-          "submenu": "svnTools.svn",
+          "command": "svnTools.update.en",
           "group": "7_svn@1",
-          "when": "svnTools.active && resourceScheme == file"
+          "when": "config.svnTools.menuLanguage == 'en' && svnTools.active && resourceScheme == file"
         },
         {
-          "submenu": "svnTools.tortoise",
+          "command": "svnTools.update.ko",
+          "group": "7_svn@1",
+          "when": "config.svnTools.menuLanguage == 'ko' && svnTools.active && resourceScheme == file"
+        },
+        {
+          "command": "svnTools.commit.en",
           "group": "7_svn@2",
-          "when": "svnTools.active && resourceScheme == file"
-        }
-      ],
-      "svnTools.svn": [
-        {
-          "command": "svnTools.update",
-          "group": "1_sync@1"
+          "when": "config.svnTools.menuLanguage == 'en' && svnTools.active && resourceScheme == file"
         },
         {
-          "command": "svnTools.commit",
-          "group": "1_sync@2"
+          "command": "svnTools.commit.ko",
+          "group": "7_svn@2",
+          "when": "config.svnTools.menuLanguage == 'ko' && svnTools.active && resourceScheme == file"
         },
         {
-          "command": "svnTools.diff",
-          "group": "2_view@1"
+          "command": "svnTools.add.en",
+          "group": "7_svn@3",
+          "when": "config.svnTools.menuLanguage == 'en' && svnTools.active && resourceScheme == file"
         },
         {
-          "command": "svnTools.log",
-          "group": "2_view@2"
+          "command": "svnTools.add.ko",
+          "group": "7_svn@3",
+          "when": "config.svnTools.menuLanguage == 'ko' && svnTools.active && resourceScheme == file"
         },
         {
-          "command": "svnTools.add",
-          "group": "3_edit@1"
+          "command": "svnTools.ignore.en",
+          "group": "7_svn@4",
+          "when": "config.svnTools.menuLanguage == 'en' && svnTools.active && resourceScheme == file"
         },
         {
-          "command": "svnTools.delete",
-          "group": "3_edit@2"
+          "command": "svnTools.ignore.ko",
+          "group": "7_svn@4",
+          "when": "config.svnTools.menuLanguage == 'ko' && svnTools.active && resourceScheme == file"
         },
         {
-          "command": "svnTools.rename",
-          "group": "3_edit@3"
+          "submenu": "svnTools.svn.en",
+          "group": "7_svn@5",
+          "when": "config.svnTools.menuLanguage == 'en' && svnTools.active && resourceScheme == file"
         },
         {
-          "command": "svnTools.revert",
-          "group": "3_edit@4"
+          "submenu": "svnTools.svn.ko",
+          "group": "7_svn@5",
+          "when": "config.svnTools.menuLanguage == 'ko' && svnTools.active && resourceScheme == file"
         },
         {
-          "command": "svnTools.resolve",
-          "group": "3_edit@5"
+          "submenu": "svnTools.tortoise.en",
+          "group": "7_svn@6",
+          "when": "config.svnTools.menuLanguage == 'en' && svnTools.active && resourceScheme == file"
         },
         {
-          "command": "svnTools.ignore",
-          "group": "4_ignore@1"
-        },
-        {
-          "command": "svnTools.ignoreReason",
-          "group": "4_ignore@2"
-        },
-        {
-          "command": "svnTools.editIgnores",
-          "group": "4_ignore@3"
-        },
-        {
-          "command": "svnTools.cleanup",
-          "group": "5_misc@1"
-        },
-        {
-          "command": "svnTools.copyUrl",
-          "group": "5_misc@2"
-        }
-      ],
-      "svnTools.tortoise": [
-        {
-          "command": "svnTools.tortoise.update",
-          "group": "1_sync@0"
-        },
-        {
-          "command": "svnTools.tortoise.commit",
-          "group": "1_sync@1"
-        },
-        {
-          "command": "svnTools.tortoise.log",
-          "group": "2_view@2"
-        },
-        {
-          "command": "svnTools.tortoise.diff",
-          "group": "2_view@3"
-        },
-        {
-          "command": "svnTools.tortoise.revisiongraph",
-          "group": "2_view@4"
-        },
-        {
-          "command": "svnTools.tortoise.repobrowser",
-          "group": "2_view@5"
-        },
-        {
-          "command": "svnTools.tortoise.blame",
-          "group": "2_view@6"
-        },
-        {
-          "command": "svnTools.tortoise.add",
-          "group": "3_edit@7"
-        },
-        {
-          "command": "svnTools.tortoise.remove",
-          "group": "3_edit@8"
-        },
-        {
-          "command": "svnTools.tortoise.rename",
-          "group": "3_edit@9"
-        },
-        {
-          "command": "svnTools.tortoise.revert",
-          "group": "3_edit@10"
-        },
-        {
-          "command": "svnTools.tortoise.conflicteditor",
-          "group": "3_edit@11"
-        },
-        {
-          "command": "svnTools.tortoise.resolve",
-          "group": "3_edit@12"
-        },
-        {
-          "command": "svnTools.tortoise.ignore",
-          "group": "4_props@13"
-        },
-        {
-          "command": "svnTools.tortoise.properties",
-          "group": "4_props@14"
-        },
-        {
-          "command": "svnTools.tortoise.merge",
-          "group": "5_branch@15"
-        },
-        {
-          "command": "svnTools.tortoise.switch",
-          "group": "5_branch@16"
-        },
-        {
-          "command": "svnTools.tortoise.lock",
-          "group": "5_branch@17"
-        },
-        {
-          "command": "svnTools.tortoise.unlock",
-          "group": "5_branch@18"
-        },
-        {
-          "command": "svnTools.tortoise.cleanup",
-          "group": "6_misc@19"
-        },
-        {
-          "command": "svnTools.tortoise.settings",
-          "group": "6_misc@20"
+          "submenu": "svnTools.tortoise.ko",
+          "group": "7_svn@6",
+          "when": "config.svnTools.menuLanguage == 'ko' && svnTools.active && resourceScheme == file"
         }
       ],
       "scm/title": [
         {
-          "command": "svnTools.commitAll",
+          "command": "svnTools.commitAll.en",
           "group": "navigation@1",
-          "when": "scmProvider == svnTools"
+          "when": "config.svnTools.menuLanguage == 'en' && scmProvider == svnTools"
         },
         {
-          "command": "svnTools.update",
+          "command": "svnTools.commitAll.ko",
+          "group": "navigation@1",
+          "when": "config.svnTools.menuLanguage == 'ko' && scmProvider == svnTools"
+        },
+        {
+          "command": "svnTools.update.en",
           "group": "navigation@2",
-          "when": "scmProvider == svnTools"
+          "when": "config.svnTools.menuLanguage == 'en' && scmProvider == svnTools"
         },
         {
-          "command": "svnTools.refresh",
+          "command": "svnTools.update.ko",
+          "group": "navigation@2",
+          "when": "config.svnTools.menuLanguage == 'ko' && scmProvider == svnTools"
+        },
+        {
+          "command": "svnTools.refresh.en",
           "group": "navigation@3",
-          "when": "scmProvider == svnTools"
+          "when": "config.svnTools.menuLanguage == 'en' && scmProvider == svnTools"
         },
         {
-          "command": "svnTools.log",
+          "command": "svnTools.refresh.ko",
+          "group": "navigation@3",
+          "when": "config.svnTools.menuLanguage == 'ko' && scmProvider == svnTools"
+        },
+        {
+          "command": "svnTools.log.en",
           "group": "1_misc@1",
-          "when": "scmProvider == svnTools"
+          "when": "config.svnTools.menuLanguage == 'en' && scmProvider == svnTools"
         },
         {
-          "command": "svnTools.cleanup",
+          "command": "svnTools.log.ko",
+          "group": "1_misc@1",
+          "when": "config.svnTools.menuLanguage == 'ko' && scmProvider == svnTools"
+        },
+        {
+          "command": "svnTools.cleanup.en",
           "group": "1_misc@2",
-          "when": "scmProvider == svnTools"
+          "when": "config.svnTools.menuLanguage == 'en' && scmProvider == svnTools"
         },
         {
-          "command": "svnTools.editIgnores",
+          "command": "svnTools.cleanup.ko",
+          "group": "1_misc@2",
+          "when": "config.svnTools.menuLanguage == 'ko' && scmProvider == svnTools"
+        },
+        {
+          "command": "svnTools.editIgnores.en",
           "group": "1_misc@3",
-          "when": "scmProvider == svnTools"
+          "when": "config.svnTools.menuLanguage == 'en' && scmProvider == svnTools"
         },
         {
-          "submenu": "svnTools.tortoise",
+          "command": "svnTools.editIgnores.ko",
+          "group": "1_misc@3",
+          "when": "config.svnTools.menuLanguage == 'ko' && scmProvider == svnTools"
+        },
+        {
+          "submenu": "svnTools.tortoise.en",
           "group": "2_tortoise@1",
-          "when": "scmProvider == svnTools"
+          "when": "config.svnTools.menuLanguage == 'en' && scmProvider == svnTools"
+        },
+        {
+          "submenu": "svnTools.tortoise.ko",
+          "group": "2_tortoise@1",
+          "when": "config.svnTools.menuLanguage == 'ko' && scmProvider == svnTools"
         }
       ],
       "scm/resourceGroup/context": [
         {
-          "command": "svnTools.revertAll",
+          "command": "svnTools.revertAll.en",
           "group": "inline",
-          "when": "scmProvider == svnTools && scmResourceGroup == changes"
+          "when": "config.svnTools.menuLanguage == 'en' && scmProvider == svnTools && scmResourceGroup == changes"
         },
         {
-          "command": "svnTools.addAll",
+          "command": "svnTools.revertAll.ko",
           "group": "inline",
-          "when": "scmProvider == svnTools && scmResourceGroup == unversioned"
+          "when": "config.svnTools.menuLanguage == 'ko' && scmProvider == svnTools && scmResourceGroup == changes"
         },
         {
-          "command": "svnTools.revertAll",
-          "group": "1_edit",
-          "when": "scmProvider == svnTools && scmResourceGroup == changes"
+          "command": "svnTools.addAll.en",
+          "group": "inline",
+          "when": "config.svnTools.menuLanguage == 'en' && scmProvider == svnTools && scmResourceGroup == unversioned"
         },
         {
-          "command": "svnTools.addAll",
+          "command": "svnTools.addAll.ko",
+          "group": "inline",
+          "when": "config.svnTools.menuLanguage == 'ko' && scmProvider == svnTools && scmResourceGroup == unversioned"
+        },
+        {
+          "command": "svnTools.revertAll.en",
           "group": "1_edit",
-          "when": "scmProvider == svnTools && scmResourceGroup == unversioned"
+          "when": "config.svnTools.menuLanguage == 'en' && scmProvider == svnTools && scmResourceGroup == changes"
+        },
+        {
+          "command": "svnTools.revertAll.ko",
+          "group": "1_edit",
+          "when": "config.svnTools.menuLanguage == 'ko' && scmProvider == svnTools && scmResourceGroup == changes"
+        },
+        {
+          "command": "svnTools.addAll.en",
+          "group": "1_edit",
+          "when": "config.svnTools.menuLanguage == 'en' && scmProvider == svnTools && scmResourceGroup == unversioned"
+        },
+        {
+          "command": "svnTools.addAll.ko",
+          "group": "1_edit",
+          "when": "config.svnTools.menuLanguage == 'ko' && scmProvider == svnTools && scmResourceGroup == unversioned"
         }
       ],
       "scm/resourceState/context": [
         {
-          "command": "svnTools.openFile",
+          "command": "svnTools.openFile.en",
           "group": "inline@1",
-          "when": "scmProvider == svnTools"
+          "when": "config.svnTools.menuLanguage == 'en' && scmProvider == svnTools"
         },
         {
-          "command": "svnTools.revert",
+          "command": "svnTools.openFile.ko",
+          "group": "inline@1",
+          "when": "config.svnTools.menuLanguage == 'ko' && scmProvider == svnTools"
+        },
+        {
+          "command": "svnTools.revert.en",
           "group": "inline@2",
-          "when": "scmProvider == svnTools && scmResourceState != unversioned"
+          "when": "config.svnTools.menuLanguage == 'en' && scmProvider == svnTools && scmResourceState != unversioned"
         },
         {
-          "command": "svnTools.add",
+          "command": "svnTools.revert.ko",
           "group": "inline@2",
-          "when": "scmProvider == svnTools && scmResourceState == unversioned"
+          "when": "config.svnTools.menuLanguage == 'ko' && scmProvider == svnTools && scmResourceState != unversioned"
         },
         {
-          "command": "svnTools.commit",
+          "command": "svnTools.add.en",
+          "group": "inline@2",
+          "when": "config.svnTools.menuLanguage == 'en' && scmProvider == svnTools && scmResourceState == unversioned"
+        },
+        {
+          "command": "svnTools.add.ko",
+          "group": "inline@2",
+          "when": "config.svnTools.menuLanguage == 'ko' && scmProvider == svnTools && scmResourceState == unversioned"
+        },
+        {
+          "command": "svnTools.commit.en",
           "group": "1_commit@1",
-          "when": "scmProvider == svnTools && scmResourceState != unversioned"
+          "when": "config.svnTools.menuLanguage == 'en' && scmProvider == svnTools && scmResourceState != unversioned"
         },
         {
-          "command": "svnTools.diff",
+          "command": "svnTools.commit.ko",
+          "group": "1_commit@1",
+          "when": "config.svnTools.menuLanguage == 'ko' && scmProvider == svnTools && scmResourceState != unversioned"
+        },
+        {
+          "command": "svnTools.diff.en",
           "group": "2_view@1",
-          "when": "scmProvider == svnTools && scmResourceState != unversioned"
+          "when": "config.svnTools.menuLanguage == 'en' && scmProvider == svnTools && scmResourceState != unversioned"
         },
         {
-          "command": "svnTools.log",
+          "command": "svnTools.diff.ko",
+          "group": "2_view@1",
+          "when": "config.svnTools.menuLanguage == 'ko' && scmProvider == svnTools && scmResourceState != unversioned"
+        },
+        {
+          "command": "svnTools.diffRevision.en",
           "group": "2_view@2",
-          "when": "scmProvider == svnTools && scmResourceState != unversioned"
+          "when": "config.svnTools.menuLanguage == 'en' && scmProvider == svnTools && scmResourceState != unversioned"
         },
         {
-          "command": "svnTools.add",
+          "command": "svnTools.diffRevision.ko",
+          "group": "2_view@2",
+          "when": "config.svnTools.menuLanguage == 'ko' && scmProvider == svnTools && scmResourceState != unversioned"
+        },
+        {
+          "command": "svnTools.log.en",
+          "group": "2_view@3",
+          "when": "config.svnTools.menuLanguage == 'en' && scmProvider == svnTools && scmResourceState != unversioned"
+        },
+        {
+          "command": "svnTools.log.ko",
+          "group": "2_view@3",
+          "when": "config.svnTools.menuLanguage == 'ko' && scmProvider == svnTools && scmResourceState != unversioned"
+        },
+        {
+          "command": "svnTools.add.en",
           "group": "3_edit@1",
-          "when": "scmProvider == svnTools && scmResourceState == unversioned"
+          "when": "config.svnTools.menuLanguage == 'en' && scmProvider == svnTools && scmResourceState == unversioned"
         },
         {
-          "command": "svnTools.revert",
+          "command": "svnTools.add.ko",
+          "group": "3_edit@1",
+          "when": "config.svnTools.menuLanguage == 'ko' && scmProvider == svnTools && scmResourceState == unversioned"
+        },
+        {
+          "command": "svnTools.revert.en",
           "group": "3_edit@2",
-          "when": "scmProvider == svnTools && scmResourceState != unversioned"
+          "when": "config.svnTools.menuLanguage == 'en' && scmProvider == svnTools && scmResourceState != unversioned"
         },
         {
-          "command": "svnTools.resolve",
+          "command": "svnTools.revert.ko",
+          "group": "3_edit@2",
+          "when": "config.svnTools.menuLanguage == 'ko' && scmProvider == svnTools && scmResourceState != unversioned"
+        },
+        {
+          "command": "svnTools.resolve.en",
           "group": "3_edit@3",
-          "when": "scmProvider == svnTools && scmResourceState == conflicted"
+          "when": "config.svnTools.menuLanguage == 'en' && scmProvider == svnTools && scmResourceState == conflicted"
         },
         {
-          "command": "svnTools.delete",
+          "command": "svnTools.resolve.ko",
+          "group": "3_edit@3",
+          "when": "config.svnTools.menuLanguage == 'ko' && scmProvider == svnTools && scmResourceState == conflicted"
+        },
+        {
+          "submenu": "svnTools.delete.en",
           "group": "3_edit@4",
-          "when": "scmProvider == svnTools"
+          "when": "config.svnTools.menuLanguage == 'en' && scmProvider == svnTools"
         },
         {
-          "command": "svnTools.ignore",
+          "submenu": "svnTools.delete.ko",
+          "group": "3_edit@4",
+          "when": "config.svnTools.menuLanguage == 'ko' && scmProvider == svnTools"
+        },
+        {
+          "command": "svnTools.ignore.en",
           "group": "3_edit@5",
-          "when": "scmProvider == svnTools && scmResourceState == unversioned"
+          "when": "config.svnTools.menuLanguage == 'en' && scmProvider == svnTools && scmResourceState == unversioned"
         },
         {
-          "submenu": "svnTools.tortoise",
+          "command": "svnTools.ignore.ko",
+          "group": "3_edit@5",
+          "when": "config.svnTools.menuLanguage == 'ko' && scmProvider == svnTools && scmResourceState == unversioned"
+        },
+        {
+          "submenu": "svnTools.tortoise.en",
           "group": "4_tortoise@1",
-          "when": "scmProvider == svnTools"
+          "when": "config.svnTools.menuLanguage == 'en' && scmProvider == svnTools"
+        },
+        {
+          "submenu": "svnTools.tortoise.ko",
+          "group": "4_tortoise@1",
+          "when": "config.svnTools.menuLanguage == 'ko' && scmProvider == svnTools"
         }
       ],
       "commandPalette": [
         {
-          "command": "svnTools.refresh",
-          "when": "svnTools.active"
+          "command": "svnTools.refresh.en",
+          "when": "config.svnTools.menuLanguage == 'en' && svnTools.active"
         },
         {
-          "command": "svnTools.commitAll",
+          "command": "svnTools.commitAll.en",
           "when": "false"
         },
         {
-          "command": "svnTools.commit",
-          "when": "svnTools.active"
+          "command": "svnTools.commit.en",
+          "when": "config.svnTools.menuLanguage == 'en' && svnTools.active"
         },
         {
-          "command": "svnTools.update",
-          "when": "svnTools.active"
+          "command": "svnTools.update.en",
+          "when": "config.svnTools.menuLanguage == 'en' && svnTools.active"
         },
         {
-          "command": "svnTools.diff",
-          "when": "svnTools.active"
+          "command": "svnTools.add.en",
+          "when": "config.svnTools.menuLanguage == 'en' && svnTools.active"
         },
         {
-          "command": "svnTools.openFile",
+          "command": "svnTools.ignore.en",
+          "when": "config.svnTools.menuLanguage == 'en' && svnTools.active"
+        },
+        {
+          "command": "svnTools.diff.en",
+          "when": "config.svnTools.menuLanguage == 'en' && svnTools.active"
+        },
+        {
+          "command": "svnTools.diffRevision.en",
+          "when": "config.svnTools.menuLanguage == 'en' && svnTools.active"
+        },
+        {
+          "command": "svnTools.openFile.en",
           "when": "false"
         },
         {
-          "command": "svnTools.revert",
-          "when": "svnTools.active"
+          "command": "svnTools.revert.en",
+          "when": "config.svnTools.menuLanguage == 'en' && svnTools.active"
         },
         {
-          "command": "svnTools.revertAll",
+          "command": "svnTools.revertAll.en",
           "when": "false"
         },
         {
-          "command": "svnTools.add",
-          "when": "svnTools.active"
-        },
-        {
-          "command": "svnTools.addAll",
+          "command": "svnTools.addAll.en",
           "when": "false"
         },
         {
-          "command": "svnTools.delete",
-          "when": "svnTools.active"
+          "command": "svnTools.deleteKeepLocal.en",
+          "when": "config.svnTools.menuLanguage == 'en' && svnTools.active"
         },
         {
-          "command": "svnTools.rename",
-          "when": "svnTools.active"
+          "command": "svnTools.deleteLocal.en",
+          "when": "config.svnTools.menuLanguage == 'en' && svnTools.active"
         },
         {
-          "command": "svnTools.ignore",
-          "when": "svnTools.active"
+          "command": "svnTools.rename.en",
+          "when": "config.svnTools.menuLanguage == 'en' && svnTools.active"
         },
         {
-          "command": "svnTools.ignoreReason",
-          "when": "svnTools.active"
+          "command": "svnTools.ignoreReason.en",
+          "when": "config.svnTools.menuLanguage == 'en' && svnTools.active"
         },
         {
-          "command": "svnTools.editIgnores",
-          "when": "svnTools.active"
+          "command": "svnTools.editIgnores.en",
+          "when": "config.svnTools.menuLanguage == 'en' && svnTools.active"
         },
         {
-          "command": "svnTools.log",
-          "when": "svnTools.active"
+          "command": "svnTools.log.en",
+          "when": "config.svnTools.menuLanguage == 'en' && svnTools.active"
         },
         {
-          "command": "svnTools.resolve",
-          "when": "svnTools.active"
+          "command": "svnTools.resolve.en",
+          "when": "config.svnTools.menuLanguage == 'en' && svnTools.active"
         },
         {
-          "command": "svnTools.cleanup",
-          "when": "svnTools.active"
+          "command": "svnTools.cleanup.en",
+          "when": "config.svnTools.menuLanguage == 'en' && svnTools.active"
         },
         {
-          "command": "svnTools.copyUrl",
-          "when": "svnTools.active"
+          "command": "svnTools.copyUrl.en",
+          "when": "config.svnTools.menuLanguage == 'en' && svnTools.active"
         },
         {
-          "command": "svnTools.tortoise.update",
-          "when": "svnTools.active"
+          "command": "svnTools.tortoise.update.en",
+          "when": "config.svnTools.menuLanguage == 'en' && svnTools.active"
         },
         {
-          "command": "svnTools.tortoise.commit",
-          "when": "svnTools.active"
+          "command": "svnTools.tortoise.commit.en",
+          "when": "config.svnTools.menuLanguage == 'en' && svnTools.active"
         },
         {
-          "command": "svnTools.tortoise.log",
-          "when": "svnTools.active"
+          "command": "svnTools.tortoise.log.en",
+          "when": "config.svnTools.menuLanguage == 'en' && svnTools.active"
         },
         {
-          "command": "svnTools.tortoise.diff",
-          "when": "svnTools.active"
+          "command": "svnTools.tortoise.diff.en",
+          "when": "config.svnTools.menuLanguage == 'en' && svnTools.active"
         },
         {
-          "command": "svnTools.tortoise.revisiongraph",
-          "when": "svnTools.active"
+          "command": "svnTools.tortoise.revisiongraph.en",
+          "when": "config.svnTools.menuLanguage == 'en' && svnTools.active"
         },
         {
-          "command": "svnTools.tortoise.repobrowser",
-          "when": "svnTools.active"
+          "command": "svnTools.tortoise.repobrowser.en",
+          "when": "config.svnTools.menuLanguage == 'en' && svnTools.active"
         },
         {
-          "command": "svnTools.tortoise.blame",
-          "when": "svnTools.active"
+          "command": "svnTools.tortoise.blame.en",
+          "when": "config.svnTools.menuLanguage == 'en' && svnTools.active"
         },
         {
-          "command": "svnTools.tortoise.add",
-          "when": "svnTools.active"
+          "command": "svnTools.tortoise.add.en",
+          "when": "config.svnTools.menuLanguage == 'en' && svnTools.active"
         },
         {
-          "command": "svnTools.tortoise.remove",
-          "when": "svnTools.active"
+          "command": "svnTools.tortoise.remove.en",
+          "when": "config.svnTools.menuLanguage == 'en' && svnTools.active"
         },
         {
-          "command": "svnTools.tortoise.rename",
-          "when": "svnTools.active"
+          "command": "svnTools.tortoise.rename.en",
+          "when": "config.svnTools.menuLanguage == 'en' && svnTools.active"
         },
         {
-          "command": "svnTools.tortoise.revert",
-          "when": "svnTools.active"
+          "command": "svnTools.tortoise.revert.en",
+          "when": "config.svnTools.menuLanguage == 'en' && svnTools.active"
         },
         {
-          "command": "svnTools.tortoise.conflicteditor",
-          "when": "svnTools.active"
+          "command": "svnTools.tortoise.conflicteditor.en",
+          "when": "config.svnTools.menuLanguage == 'en' && svnTools.active"
         },
         {
-          "command": "svnTools.tortoise.resolve",
-          "when": "svnTools.active"
+          "command": "svnTools.tortoise.resolve.en",
+          "when": "config.svnTools.menuLanguage == 'en' && svnTools.active"
         },
         {
-          "command": "svnTools.tortoise.ignore",
-          "when": "svnTools.active"
+          "command": "svnTools.tortoise.ignore.en",
+          "when": "config.svnTools.menuLanguage == 'en' && svnTools.active"
         },
         {
-          "command": "svnTools.tortoise.properties",
-          "when": "svnTools.active"
+          "command": "svnTools.tortoise.properties.en",
+          "when": "config.svnTools.menuLanguage == 'en' && svnTools.active"
         },
         {
-          "command": "svnTools.tortoise.merge",
-          "when": "svnTools.active"
+          "command": "svnTools.tortoise.merge.en",
+          "when": "config.svnTools.menuLanguage == 'en' && svnTools.active"
         },
         {
-          "command": "svnTools.tortoise.switch",
-          "when": "svnTools.active"
+          "command": "svnTools.tortoise.switch.en",
+          "when": "config.svnTools.menuLanguage == 'en' && svnTools.active"
         },
         {
-          "command": "svnTools.tortoise.lock",
-          "when": "svnTools.active"
+          "command": "svnTools.tortoise.lock.en",
+          "when": "config.svnTools.menuLanguage == 'en' && svnTools.active"
         },
         {
-          "command": "svnTools.tortoise.unlock",
-          "when": "svnTools.active"
+          "command": "svnTools.tortoise.unlock.en",
+          "when": "config.svnTools.menuLanguage == 'en' && svnTools.active"
         },
         {
-          "command": "svnTools.tortoise.cleanup",
-          "when": "svnTools.active"
+          "command": "svnTools.tortoise.cleanup.en",
+          "when": "config.svnTools.menuLanguage == 'en' && svnTools.active"
         },
         {
-          "command": "svnTools.tortoise.settings",
-          "when": "svnTools.active"
+          "command": "svnTools.tortoise.settings.en",
+          "when": "config.svnTools.menuLanguage == 'en' && svnTools.active"
+        },
+        {
+          "command": "svnTools.refresh.ko",
+          "when": "config.svnTools.menuLanguage == 'ko' && svnTools.active"
+        },
+        {
+          "command": "svnTools.commitAll.ko",
+          "when": "false"
+        },
+        {
+          "command": "svnTools.commit.ko",
+          "when": "config.svnTools.menuLanguage == 'ko' && svnTools.active"
+        },
+        {
+          "command": "svnTools.update.ko",
+          "when": "config.svnTools.menuLanguage == 'ko' && svnTools.active"
+        },
+        {
+          "command": "svnTools.add.ko",
+          "when": "config.svnTools.menuLanguage == 'ko' && svnTools.active"
+        },
+        {
+          "command": "svnTools.ignore.ko",
+          "when": "config.svnTools.menuLanguage == 'ko' && svnTools.active"
+        },
+        {
+          "command": "svnTools.diff.ko",
+          "when": "config.svnTools.menuLanguage == 'ko' && svnTools.active"
+        },
+        {
+          "command": "svnTools.diffRevision.ko",
+          "when": "config.svnTools.menuLanguage == 'ko' && svnTools.active"
+        },
+        {
+          "command": "svnTools.openFile.ko",
+          "when": "false"
+        },
+        {
+          "command": "svnTools.revert.ko",
+          "when": "config.svnTools.menuLanguage == 'ko' && svnTools.active"
+        },
+        {
+          "command": "svnTools.revertAll.ko",
+          "when": "false"
+        },
+        {
+          "command": "svnTools.addAll.ko",
+          "when": "false"
+        },
+        {
+          "command": "svnTools.deleteKeepLocal.ko",
+          "when": "config.svnTools.menuLanguage == 'ko' && svnTools.active"
+        },
+        {
+          "command": "svnTools.deleteLocal.ko",
+          "when": "config.svnTools.menuLanguage == 'ko' && svnTools.active"
+        },
+        {
+          "command": "svnTools.rename.ko",
+          "when": "config.svnTools.menuLanguage == 'ko' && svnTools.active"
+        },
+        {
+          "command": "svnTools.ignoreReason.ko",
+          "when": "config.svnTools.menuLanguage == 'ko' && svnTools.active"
+        },
+        {
+          "command": "svnTools.editIgnores.ko",
+          "when": "config.svnTools.menuLanguage == 'ko' && svnTools.active"
+        },
+        {
+          "command": "svnTools.log.ko",
+          "when": "config.svnTools.menuLanguage == 'ko' && svnTools.active"
+        },
+        {
+          "command": "svnTools.resolve.ko",
+          "when": "config.svnTools.menuLanguage == 'ko' && svnTools.active"
+        },
+        {
+          "command": "svnTools.cleanup.ko",
+          "when": "config.svnTools.menuLanguage == 'ko' && svnTools.active"
+        },
+        {
+          "command": "svnTools.copyUrl.ko",
+          "when": "config.svnTools.menuLanguage == 'ko' && svnTools.active"
+        },
+        {
+          "command": "svnTools.tortoise.update.ko",
+          "when": "config.svnTools.menuLanguage == 'ko' && svnTools.active"
+        },
+        {
+          "command": "svnTools.tortoise.commit.ko",
+          "when": "config.svnTools.menuLanguage == 'ko' && svnTools.active"
+        },
+        {
+          "command": "svnTools.tortoise.log.ko",
+          "when": "config.svnTools.menuLanguage == 'ko' && svnTools.active"
+        },
+        {
+          "command": "svnTools.tortoise.diff.ko",
+          "when": "config.svnTools.menuLanguage == 'ko' && svnTools.active"
+        },
+        {
+          "command": "svnTools.tortoise.revisiongraph.ko",
+          "when": "config.svnTools.menuLanguage == 'ko' && svnTools.active"
+        },
+        {
+          "command": "svnTools.tortoise.repobrowser.ko",
+          "when": "config.svnTools.menuLanguage == 'ko' && svnTools.active"
+        },
+        {
+          "command": "svnTools.tortoise.blame.ko",
+          "when": "config.svnTools.menuLanguage == 'ko' && svnTools.active"
+        },
+        {
+          "command": "svnTools.tortoise.add.ko",
+          "when": "config.svnTools.menuLanguage == 'ko' && svnTools.active"
+        },
+        {
+          "command": "svnTools.tortoise.remove.ko",
+          "when": "config.svnTools.menuLanguage == 'ko' && svnTools.active"
+        },
+        {
+          "command": "svnTools.tortoise.rename.ko",
+          "when": "config.svnTools.menuLanguage == 'ko' && svnTools.active"
+        },
+        {
+          "command": "svnTools.tortoise.revert.ko",
+          "when": "config.svnTools.menuLanguage == 'ko' && svnTools.active"
+        },
+        {
+          "command": "svnTools.tortoise.conflicteditor.ko",
+          "when": "config.svnTools.menuLanguage == 'ko' && svnTools.active"
+        },
+        {
+          "command": "svnTools.tortoise.resolve.ko",
+          "when": "config.svnTools.menuLanguage == 'ko' && svnTools.active"
+        },
+        {
+          "command": "svnTools.tortoise.ignore.ko",
+          "when": "config.svnTools.menuLanguage == 'ko' && svnTools.active"
+        },
+        {
+          "command": "svnTools.tortoise.properties.ko",
+          "when": "config.svnTools.menuLanguage == 'ko' && svnTools.active"
+        },
+        {
+          "command": "svnTools.tortoise.merge.ko",
+          "when": "config.svnTools.menuLanguage == 'ko' && svnTools.active"
+        },
+        {
+          "command": "svnTools.tortoise.switch.ko",
+          "when": "config.svnTools.menuLanguage == 'ko' && svnTools.active"
+        },
+        {
+          "command": "svnTools.tortoise.lock.ko",
+          "when": "config.svnTools.menuLanguage == 'ko' && svnTools.active"
+        },
+        {
+          "command": "svnTools.tortoise.unlock.ko",
+          "when": "config.svnTools.menuLanguage == 'ko' && svnTools.active"
+        },
+        {
+          "command": "svnTools.tortoise.cleanup.ko",
+          "when": "config.svnTools.menuLanguage == 'ko' && svnTools.active"
+        },
+        {
+          "command": "svnTools.tortoise.settings.ko",
+          "when": "config.svnTools.menuLanguage == 'ko' && svnTools.active"
+        }
+      ],
+      "svnTools.svn.en": [
+        {
+          "command": "svnTools.diff.en",
+          "group": "2_view@1",
+          "when": "config.svnTools.menuLanguage == 'en'"
+        },
+        {
+          "command": "svnTools.diffRevision.en",
+          "group": "2_view@2",
+          "when": "config.svnTools.menuLanguage == 'en'"
+        },
+        {
+          "command": "svnTools.log.en",
+          "group": "2_view@3",
+          "when": "config.svnTools.menuLanguage == 'en'"
+        },
+        {
+          "submenu": "svnTools.delete.en",
+          "group": "3_edit@1",
+          "when": "config.svnTools.menuLanguage == 'en'"
+        },
+        {
+          "command": "svnTools.rename.en",
+          "group": "3_edit@2",
+          "when": "config.svnTools.menuLanguage == 'en'"
+        },
+        {
+          "command": "svnTools.revert.en",
+          "group": "3_edit@3",
+          "when": "config.svnTools.menuLanguage == 'en'"
+        },
+        {
+          "command": "svnTools.resolve.en",
+          "group": "3_edit@4",
+          "when": "config.svnTools.menuLanguage == 'en'"
+        },
+        {
+          "command": "svnTools.ignoreReason.en",
+          "group": "4_ignore@1",
+          "when": "config.svnTools.menuLanguage == 'en'"
+        },
+        {
+          "command": "svnTools.editIgnores.en",
+          "group": "4_ignore@2",
+          "when": "config.svnTools.menuLanguage == 'en'"
+        },
+        {
+          "command": "svnTools.cleanup.en",
+          "group": "5_misc@1",
+          "when": "config.svnTools.menuLanguage == 'en'"
+        },
+        {
+          "command": "svnTools.copyUrl.en",
+          "group": "5_misc@2",
+          "when": "config.svnTools.menuLanguage == 'en'"
+        }
+      ],
+      "svnTools.tortoise.en": [
+        {
+          "command": "svnTools.tortoise.update.en",
+          "group": "1_sync@0",
+          "when": "config.svnTools.menuLanguage == 'en'"
+        },
+        {
+          "command": "svnTools.tortoise.commit.en",
+          "group": "1_sync@1",
+          "when": "config.svnTools.menuLanguage == 'en'"
+        },
+        {
+          "command": "svnTools.tortoise.log.en",
+          "group": "2_view@2",
+          "when": "config.svnTools.menuLanguage == 'en'"
+        },
+        {
+          "command": "svnTools.tortoise.diff.en",
+          "group": "2_view@3",
+          "when": "config.svnTools.menuLanguage == 'en'"
+        },
+        {
+          "command": "svnTools.tortoise.revisiongraph.en",
+          "group": "2_view@4",
+          "when": "config.svnTools.menuLanguage == 'en'"
+        },
+        {
+          "command": "svnTools.tortoise.repobrowser.en",
+          "group": "2_view@5",
+          "when": "config.svnTools.menuLanguage == 'en'"
+        },
+        {
+          "command": "svnTools.tortoise.blame.en",
+          "group": "2_view@6",
+          "when": "config.svnTools.menuLanguage == 'en'"
+        },
+        {
+          "command": "svnTools.tortoise.add.en",
+          "group": "3_edit@7",
+          "when": "config.svnTools.menuLanguage == 'en'"
+        },
+        {
+          "command": "svnTools.tortoise.remove.en",
+          "group": "3_edit@8",
+          "when": "config.svnTools.menuLanguage == 'en'"
+        },
+        {
+          "command": "svnTools.tortoise.rename.en",
+          "group": "3_edit@9",
+          "when": "config.svnTools.menuLanguage == 'en'"
+        },
+        {
+          "command": "svnTools.tortoise.revert.en",
+          "group": "3_edit@10",
+          "when": "config.svnTools.menuLanguage == 'en'"
+        },
+        {
+          "command": "svnTools.tortoise.conflicteditor.en",
+          "group": "3_edit@11",
+          "when": "config.svnTools.menuLanguage == 'en'"
+        },
+        {
+          "command": "svnTools.tortoise.resolve.en",
+          "group": "3_edit@12",
+          "when": "config.svnTools.menuLanguage == 'en'"
+        },
+        {
+          "command": "svnTools.tortoise.ignore.en",
+          "group": "4_props@13",
+          "when": "config.svnTools.menuLanguage == 'en'"
+        },
+        {
+          "command": "svnTools.tortoise.properties.en",
+          "group": "4_props@14",
+          "when": "config.svnTools.menuLanguage == 'en'"
+        },
+        {
+          "command": "svnTools.tortoise.merge.en",
+          "group": "5_branch@15",
+          "when": "config.svnTools.menuLanguage == 'en'"
+        },
+        {
+          "command": "svnTools.tortoise.switch.en",
+          "group": "5_branch@16",
+          "when": "config.svnTools.menuLanguage == 'en'"
+        },
+        {
+          "command": "svnTools.tortoise.lock.en",
+          "group": "5_branch@17",
+          "when": "config.svnTools.menuLanguage == 'en'"
+        },
+        {
+          "command": "svnTools.tortoise.unlock.en",
+          "group": "5_branch@18",
+          "when": "config.svnTools.menuLanguage == 'en'"
+        },
+        {
+          "command": "svnTools.tortoise.cleanup.en",
+          "group": "6_misc@19",
+          "when": "config.svnTools.menuLanguage == 'en'"
+        },
+        {
+          "command": "svnTools.tortoise.settings.en",
+          "group": "6_misc@20",
+          "when": "config.svnTools.menuLanguage == 'en'"
+        }
+      ],
+      "svnTools.delete.en": [
+        {
+          "command": "svnTools.deleteKeepLocal.en",
+          "group": "1@1",
+          "when": "config.svnTools.menuLanguage == 'en'"
+        },
+        {
+          "command": "svnTools.deleteLocal.en",
+          "group": "1@2",
+          "when": "config.svnTools.menuLanguage == 'en'"
+        }
+      ],
+      "svnTools.svn.ko": [
+        {
+          "command": "svnTools.diff.ko",
+          "group": "2_view@1",
+          "when": "config.svnTools.menuLanguage == 'ko'"
+        },
+        {
+          "command": "svnTools.diffRevision.ko",
+          "group": "2_view@2",
+          "when": "config.svnTools.menuLanguage == 'ko'"
+        },
+        {
+          "command": "svnTools.log.ko",
+          "group": "2_view@3",
+          "when": "config.svnTools.menuLanguage == 'ko'"
+        },
+        {
+          "submenu": "svnTools.delete.ko",
+          "group": "3_edit@1",
+          "when": "config.svnTools.menuLanguage == 'ko'"
+        },
+        {
+          "command": "svnTools.rename.ko",
+          "group": "3_edit@2",
+          "when": "config.svnTools.menuLanguage == 'ko'"
+        },
+        {
+          "command": "svnTools.revert.ko",
+          "group": "3_edit@3",
+          "when": "config.svnTools.menuLanguage == 'ko'"
+        },
+        {
+          "command": "svnTools.resolve.ko",
+          "group": "3_edit@4",
+          "when": "config.svnTools.menuLanguage == 'ko'"
+        },
+        {
+          "command": "svnTools.ignoreReason.ko",
+          "group": "4_ignore@1",
+          "when": "config.svnTools.menuLanguage == 'ko'"
+        },
+        {
+          "command": "svnTools.editIgnores.ko",
+          "group": "4_ignore@2",
+          "when": "config.svnTools.menuLanguage == 'ko'"
+        },
+        {
+          "command": "svnTools.cleanup.ko",
+          "group": "5_misc@1",
+          "when": "config.svnTools.menuLanguage == 'ko'"
+        },
+        {
+          "command": "svnTools.copyUrl.ko",
+          "group": "5_misc@2",
+          "when": "config.svnTools.menuLanguage == 'ko'"
+        }
+      ],
+      "svnTools.tortoise.ko": [
+        {
+          "command": "svnTools.tortoise.update.ko",
+          "group": "1_sync@0",
+          "when": "config.svnTools.menuLanguage == 'ko'"
+        },
+        {
+          "command": "svnTools.tortoise.commit.ko",
+          "group": "1_sync@1",
+          "when": "config.svnTools.menuLanguage == 'ko'"
+        },
+        {
+          "command": "svnTools.tortoise.log.ko",
+          "group": "2_view@2",
+          "when": "config.svnTools.menuLanguage == 'ko'"
+        },
+        {
+          "command": "svnTools.tortoise.diff.ko",
+          "group": "2_view@3",
+          "when": "config.svnTools.menuLanguage == 'ko'"
+        },
+        {
+          "command": "svnTools.tortoise.revisiongraph.ko",
+          "group": "2_view@4",
+          "when": "config.svnTools.menuLanguage == 'ko'"
+        },
+        {
+          "command": "svnTools.tortoise.repobrowser.ko",
+          "group": "2_view@5",
+          "when": "config.svnTools.menuLanguage == 'ko'"
+        },
+        {
+          "command": "svnTools.tortoise.blame.ko",
+          "group": "2_view@6",
+          "when": "config.svnTools.menuLanguage == 'ko'"
+        },
+        {
+          "command": "svnTools.tortoise.add.ko",
+          "group": "3_edit@7",
+          "when": "config.svnTools.menuLanguage == 'ko'"
+        },
+        {
+          "command": "svnTools.tortoise.remove.ko",
+          "group": "3_edit@8",
+          "when": "config.svnTools.menuLanguage == 'ko'"
+        },
+        {
+          "command": "svnTools.tortoise.rename.ko",
+          "group": "3_edit@9",
+          "when": "config.svnTools.menuLanguage == 'ko'"
+        },
+        {
+          "command": "svnTools.tortoise.revert.ko",
+          "group": "3_edit@10",
+          "when": "config.svnTools.menuLanguage == 'ko'"
+        },
+        {
+          "command": "svnTools.tortoise.conflicteditor.ko",
+          "group": "3_edit@11",
+          "when": "config.svnTools.menuLanguage == 'ko'"
+        },
+        {
+          "command": "svnTools.tortoise.resolve.ko",
+          "group": "3_edit@12",
+          "when": "config.svnTools.menuLanguage == 'ko'"
+        },
+        {
+          "command": "svnTools.tortoise.ignore.ko",
+          "group": "4_props@13",
+          "when": "config.svnTools.menuLanguage == 'ko'"
+        },
+        {
+          "command": "svnTools.tortoise.properties.ko",
+          "group": "4_props@14",
+          "when": "config.svnTools.menuLanguage == 'ko'"
+        },
+        {
+          "command": "svnTools.tortoise.merge.ko",
+          "group": "5_branch@15",
+          "when": "config.svnTools.menuLanguage == 'ko'"
+        },
+        {
+          "command": "svnTools.tortoise.switch.ko",
+          "group": "5_branch@16",
+          "when": "config.svnTools.menuLanguage == 'ko'"
+        },
+        {
+          "command": "svnTools.tortoise.lock.ko",
+          "group": "5_branch@17",
+          "when": "config.svnTools.menuLanguage == 'ko'"
+        },
+        {
+          "command": "svnTools.tortoise.unlock.ko",
+          "group": "5_branch@18",
+          "when": "config.svnTools.menuLanguage == 'ko'"
+        },
+        {
+          "command": "svnTools.tortoise.cleanup.ko",
+          "group": "6_misc@19",
+          "when": "config.svnTools.menuLanguage == 'ko'"
+        },
+        {
+          "command": "svnTools.tortoise.settings.ko",
+          "group": "6_misc@20",
+          "when": "config.svnTools.menuLanguage == 'ko'"
+        }
+      ],
+      "svnTools.delete.ko": [
+        {
+          "command": "svnTools.deleteKeepLocal.ko",
+          "group": "1@1",
+          "when": "config.svnTools.menuLanguage == 'ko'"
+        },
+        {
+          "command": "svnTools.deleteLocal.ko",
+          "group": "1@2",
+          "when": "config.svnTools.menuLanguage == 'ko'"
         }
       ]
     },
     "configuration": {
       "title": "SVN Tools",
       "properties": {
+        "svnTools.menuLanguage": {
+          "type": "string",
+          "enum": [
+            "en",
+            "ko"
+          ],
+          "default": "en",
+          "enumDescriptions": [
+            "English",
+            "한국어"
+          ],
+          "description": "메뉴·버튼·Source Control 그룹 이름의 언어 / Language of menus, buttons and Source Control group names"
+        },
         "svnTools.language": {
           "type": "string",
           "enum": [
@@ -785,12 +1654,7 @@
             "English",
             "한국어"
           ],
-          "description": "알림·확인 창·화면 문구의 언어(메뉴는 영어 고정) / Language of messages, dialogs and views (menus are always English)"
-        },
-        "svnTools.delete.keepLocal": {
-          "type": "boolean",
-          "default": true,
-          "description": "SVN에서 삭제할 때 로컬 파일은 남긴다(svn delete --keep-local) / Keep local files when deleting from SVN"
+          "description": "알림·확인 창·화면 문구의 언어 / Language of messages, dialogs and views"
         },
         "svnTools.commit.checkOutOfDate": {
           "type": "boolean",

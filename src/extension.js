@@ -5,6 +5,7 @@ const { Repository } = require('./repository');
 const { DecorationProvider } = require('./decorations');
 const { createCommands } = require('./commands');
 const { COMMANDS: TORTOISE_COMMANDS } = require('./tortoise');
+const { LANGUAGES } = require('./languages');
 
 let repositories = [];
 
@@ -64,9 +65,15 @@ function activate(context) {
     },
   }));
 
-  // ---- 명령 (메뉴 이름은 영어 고정, manifest.js) ----
+  // ---- 명령: 같은 처리를 기본 ID와 언어별 ID(.en/.ko) 모두에 묶는다 ----
+  // 메뉴 이름은 package.json 고정이라, 메뉴 언어(svnTools.menuLanguage)에 맞는 ID만 메뉴에 보이게 manifest.js가 나눠 둔다.
   const handlers = createCommands(ctx);
-  const register = (id, fn) => context.subscriptions.push(vscode.commands.registerCommand(`svnTools.${id}`, fn));
+  const register = (id, fn) => {
+    context.subscriptions.push(vscode.commands.registerCommand(`svnTools.${id}`, fn));
+    for (const lang of LANGUAGES) {
+      context.subscriptions.push(vscode.commands.registerCommand(`svnTools.${id}.${lang}`, fn));
+    }
+  };
   for (const [id, fn] of Object.entries(handlers)) {
     if (id !== 'tortoise') register(id, fn);
   }
@@ -84,7 +91,9 @@ function activate(context) {
   }));
 
   context.subscriptions.push(vscode.workspace.onDidChangeConfiguration((e) => {
-    if (e.affectsConfiguration('svnTools.language')) repositories.forEach((r) => r.applyLanguage());
+    if (e.affectsConfiguration('svnTools.language') || e.affectsConfiguration('svnTools.menuLanguage')) {
+      repositories.forEach((r) => r.applyLanguage());
+    }
     if (e.affectsConfiguration('svnTools.scm')) refreshAll();
     if (e.affectsConfiguration('svnTools')) decorations.refresh();
   }));

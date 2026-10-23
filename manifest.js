@@ -1,16 +1,18 @@
 'use strict';
 // package.json 생성기. `node manifest.js`로 다시 만든다(package.json을 직접 고치지 않는다).
 //
-// 메뉴·명령 이름은 영어로 고정한다(사용자 결정 2026-10-23 — svn 용어는 영어가 익숙하고 TortoiseSVN과 맞는다).
-// 알림·확인 창·웹뷰 화면의 문구만 설정 svnTools.language를 따른다(src/i18n.js).
+// 메뉴 이름 언어(svnTools.menuLanguage)와 문구 언어(svnTools.language)는 따로 고른다(사용자 결정 2026-10-23).
+// VS Code는 메뉴 이름을 package.json에 고정 문자열로만 받아서, 명령 하나를 svnTools.<id>.en / svnTools.<id>.ko
+// 두 개로 펼치고 메뉴에는 설정 언어와 맞는 쪽만 보이게 when 조건을 붙인다. 처리 함수는 extension.js가 같은 것을 묶는다.
 const fs = require('fs');
 const path = require('path');
+const { LANGUAGES } = require('./src/languages');
 
 const pkg = {
   name: 'vscode-svn-tools',
   displayName: 'SVN Tools',
   description: 'SVN Source Control panel, explorer context menu (SVN / TortoiseSVN) and status decorations including ignored files.',
-  version: '0.7.0',
+  version: '0.8.0',
   publisher: 'khoon',
   license: 'MIT',
   repository: { type: 'git', url: 'https://github.com/pugi-kh/vscode-svn-tools.git' },
@@ -24,57 +26,60 @@ const pkg = {
   main: './src/extension.js',
   scripts: {
     manifest: 'node manifest.js',
-    test: 'node test/svn-paths.js',
+    test: 'node manifest.js && node test/svn-paths.js && node test/manifest-check.js',
     package: 'node manifest.js && npx --yes @vscode/vsce package',
   },
 };
 
-// [id, 이름, 아이콘]
+// [id, 영어, 한국어, 아이콘]
+// update·commit·add·ignore는 탐색기 우클릭 최상위에 바로 보이므로 이름 앞에 SVN을 붙여 다른 메뉴와 구분한다.
 const COMMANDS = [
-  ['refresh', 'Refresh', '$(refresh)'],
-  ['commitAll', 'Commit', '$(check)'],
-  ['commit', 'Commit…'],
-  ['update', 'Update', '$(arrow-down)'],
-  ['diff', 'Compare with BASE', '$(diff)'],
-  ['openFile', 'Open File', '$(go-to-file)'],
-  ['revert', 'Revert', '$(discard)'],
-  ['revertAll', 'Revert All', '$(discard)'],
-  ['add', 'Add', '$(add)'],
-  ['addAll', 'Add All', '$(add)'],
-  ['delete', 'Delete'],
-  ['rename', 'Rename (keep history)'],
-  ['ignore', 'Add to Ignore List…'],
-  ['ignoreReason', 'Show Ignore Reason…'],
-  ['editIgnores', 'Edit Ignore Lists…', '$(eye-closed)'],
-  ['log', 'Show Log', '$(history)'],
-  ['resolve', 'Resolve Conflict…'],
-  ['cleanup', 'Clean Up'],
-  ['copyUrl', 'Copy SVN URL'],
+  ['refresh', 'Refresh', '새로고침', '$(refresh)'],
+  ['commitAll', 'Commit', '커밋', '$(check)'],
+  ['commit', 'SVN Commit…', 'SVN 커밋…'],
+  ['update', 'SVN Update', 'SVN 업데이트', '$(arrow-down)'],
+  ['add', 'SVN Add', 'SVN 추가', '$(add)'],
+  ['ignore', 'SVN Ignore…', 'SVN 무시 목록에 추가…'],
+  ['diff', 'Compare with BASE', 'BASE와 비교', '$(diff)'],
+  ['diffRevision', 'Compare with Revision…', '리비전과 비교…'],
+  ['openFile', 'Open File', '파일 열기', '$(go-to-file)'],
+  ['revert', 'Revert', '되돌리기', '$(discard)'],
+  ['revertAll', 'Revert All', '모두 되돌리기', '$(discard)'],
+  ['addAll', 'Add All', '모두 추가', '$(add)'],
+  ['deleteKeepLocal', 'Keep Local File', '로컬 파일은 유지'],
+  ['deleteLocal', 'Delete Local File Too', '로컬 파일도 삭제'],
+  ['rename', 'Rename (keep history)', '이름 바꾸기 (이력 유지)'],
+  ['ignoreReason', 'Show Ignore Reason…', '무시된 원인 보기…'],
+  ['editIgnores', 'Edit Ignore Lists…', '무시 목록 편집…', '$(eye-closed)'],
+  ['log', 'Show Log', '로그 보기', '$(history)'],
+  ['resolve', 'Resolve Conflict…', '충돌 해결…'],
+  ['cleanup', 'Clean Up', '정리 (Cleanup)'],
+  ['copyUrl', 'Copy SVN URL', 'SVN URL 복사'],
 ];
 
-// TortoiseSVN 창으로 여는 명령. id는 src/tortoise.js의 COMMANDS 키와 같다. 이름은 TortoiseSVN 메뉴와 맞춘다.
+// TortoiseSVN 창으로 여는 명령. id는 src/tortoise.js의 COMMANDS 키와 같다. 영어 이름은 TortoiseSVN 메뉴와 맞춘다.
 const TORTOISE = [
-  ['update', 'Update'],
-  ['commit', 'Commit'],
-  ['log', 'Show Log'],
-  ['diff', 'Diff'],
-  ['revisiongraph', 'Revision Graph'],
-  ['repobrowser', 'Repo-browser'],
-  ['blame', 'Blame'],
-  ['add', 'Add'],
-  ['remove', 'Delete'],
-  ['rename', 'Rename'],
-  ['revert', 'Revert'],
-  ['conflicteditor', 'Edit Conflicts'],
-  ['resolve', 'Resolved'],
-  ['ignore', 'Add to Ignore List'],
-  ['properties', 'Properties'],
-  ['merge', 'Merge'],
-  ['switch', 'Switch'],
-  ['lock', 'Get Lock'],
-  ['unlock', 'Release Lock'],
-  ['cleanup', 'Clean Up'],
-  ['settings', 'Settings'],
+  ['update', 'Update', '업데이트'],
+  ['commit', 'Commit', '커밋'],
+  ['log', 'Show Log', '로그 보기'],
+  ['diff', 'Diff', '비교'],
+  ['revisiongraph', 'Revision Graph', '리비전 그래프'],
+  ['repobrowser', 'Repo-browser', '저장소 탐색기'],
+  ['blame', 'Blame', 'Blame'],
+  ['add', 'Add', '추가'],
+  ['remove', 'Delete', '삭제'],
+  ['rename', 'Rename', '이름 바꾸기'],
+  ['revert', 'Revert', '되돌리기'],
+  ['conflicteditor', 'Edit Conflicts', '충돌 편집'],
+  ['resolve', 'Resolved', '해결됨으로 표시'],
+  ['ignore', 'Add to Ignore List', '무시 목록에 추가'],
+  ['properties', 'Properties', '속성'],
+  ['merge', 'Merge', '병합'],
+  ['switch', 'Switch', '전환'],
+  ['lock', 'Get Lock', '잠금'],
+  ['unlock', 'Release Lock', '잠금 해제'],
+  ['cleanup', 'Clean Up', '정리'],
+  ['settings', 'Settings', '설정'],
 ];
 
 // TortoiseSVN 하위 메뉴의 묶음(구분선 단위)
@@ -87,88 +92,119 @@ const TORTOISE_GROUPS = {
   cleanup: '6_misc', settings: '6_misc',
 };
 
-// 탐색기 "SVN" 하위 메뉴: [id, group]
+// 하위 메뉴 이름: [id, 영어, 한국어]
+const SUBMENUS = [
+  ['svn', 'SVN', 'SVN'],
+  ['tortoise', 'TortoiseSVN', 'TortoiseSVN'],
+  ['delete', 'Delete', 'SVN에서 삭제'],
+];
+
+// 탐색기 우클릭 최상위에 바로 보이는 자주 쓰는 명령: [id, group]
+const TOP_LEVEL = [['update', '7_svn@1'], ['commit', '7_svn@2'], ['add', '7_svn@3'], ['ignore', '7_svn@4']];
+
+// 탐색기 "SVN" 하위 메뉴(최상위에 있는 것은 빼서 중복을 없앤다): [id 또는 submenu:<id>, group]
 const SVN_SUBMENU = [
-  ['update', '1_sync@1'], ['commit', '1_sync@2'],
-  ['diff', '2_view@1'], ['log', '2_view@2'],
-  ['add', '3_edit@1'], ['delete', '3_edit@2'], ['rename', '3_edit@3'], ['revert', '3_edit@4'], ['resolve', '3_edit@5'],
-  ['ignore', '4_ignore@1'], ['ignoreReason', '4_ignore@2'], ['editIgnores', '4_ignore@3'],
+  ['diff', '2_view@1'], ['diffRevision', '2_view@2'], ['log', '2_view@3'],
+  ['submenu:delete', '3_edit@1'], ['rename', '3_edit@2'], ['revert', '3_edit@3'], ['resolve', '3_edit@4'],
+  ['ignoreReason', '4_ignore@1'], ['editIgnores', '4_ignore@2'],
   ['cleanup', '5_misc@1'], ['copyUrl', '5_misc@2'],
 ];
 
+const DELETE_SUBMENU = [['deleteKeepLocal', '1@1'], ['deleteLocal', '1@2']];
+
 const SCM = 'scmProvider == svnTools';
+const langWhen = (lang) => `config.svnTools.menuLanguage == '${lang}'`;
 const and = (...parts) => parts.filter(Boolean).join(' && ');
 
 // ---- 명령 ----
-const commands = [
-  ...COMMANDS.map(([id, title, icon]) => ({ command: `svnTools.${id}`, title, category: 'SVN', ...(icon && { icon }) })),
-  ...TORTOISE.map(([id, title]) => ({ command: `svnTools.tortoise.${id}`, title, category: 'TortoiseSVN' })),
-];
+const commands = [];
+for (const lang of LANGUAGES) {
+  const pick = (en, ko) => (lang === 'ko' ? ko : en);
+  for (const [id, en, ko, icon] of COMMANDS) {
+    commands.push({ command: `svnTools.${id}.${lang}`, title: pick(en, ko), category: 'SVN', ...(icon && { icon }) });
+  }
+  for (const [id, en, ko] of TORTOISE) {
+    commands.push({ command: `svnTools.tortoise.${id}.${lang}`, title: pick(en, ko), category: 'TortoiseSVN' });
+  }
+}
 
+// 메뉴 항목 하나를 언어별로 펼친다. 'submenu:<id>'는 언어별 하위 메뉴(svnTools.<id>.<lang>)를 가리킨다.
 function item(id, group, when) {
-  return { command: `svnTools.${id}`, group, ...(when && { when }) };
+  return LANGUAGES.map((lang) => {
+    const target = id.startsWith('submenu:')
+      ? { submenu: `svnTools.${id.slice(8)}.${lang}` }
+      : { command: `svnTools.${id}.${lang}` };
+    return { ...target, group, when: and(langWhen(lang), when) };
+  });
 }
 
 // ---- 메뉴 ----
 const fileWhen = 'svnTools.active && resourceScheme == file';
+const contextMenu = (when) => [
+  ...TOP_LEVEL.flatMap(([id, group]) => item(id, group, when)),
+  ...item('submenu:svn', '7_svn@5', when),
+  ...item('submenu:tortoise', '7_svn@6', when),
+];
 const menus = {
-  'explorer/context': [
-    { submenu: 'svnTools.svn', group: '7_svn@1', when: 'svnTools.active' },
-    { submenu: 'svnTools.tortoise', group: '7_svn@2', when: 'svnTools.active' },
-  ],
-  'editor/title/context': [
-    { submenu: 'svnTools.svn', group: '7_svn@1', when: fileWhen },
-    { submenu: 'svnTools.tortoise', group: '7_svn@2', when: fileWhen },
-  ],
-  'svnTools.svn': SVN_SUBMENU.map(([id, group]) => item(id, group)),
-  'svnTools.tortoise': TORTOISE.map(([id], i) => item(`tortoise.${id}`, `${TORTOISE_GROUPS[id]}@${i}`)),
+  'explorer/context': contextMenu('svnTools.active'),
+  'editor/title/context': contextMenu(fileWhen),
   'scm/title': [
-    item('commitAll', 'navigation@1', SCM),
-    item('update', 'navigation@2', SCM),
-    item('refresh', 'navigation@3', SCM),
-    item('log', '1_misc@1', SCM),
-    item('cleanup', '1_misc@2', SCM),
-    item('editIgnores', '1_misc@3', SCM),
-    { submenu: 'svnTools.tortoise', group: '2_tortoise@1', when: SCM },
+    ...item('commitAll', 'navigation@1', SCM),
+    ...item('update', 'navigation@2', SCM),
+    ...item('refresh', 'navigation@3', SCM),
+    ...item('log', '1_misc@1', SCM),
+    ...item('cleanup', '1_misc@2', SCM),
+    ...item('editIgnores', '1_misc@3', SCM),
+    ...item('submenu:tortoise', '2_tortoise@1', SCM),
   ],
   'scm/resourceGroup/context': [
-    item('revertAll', 'inline', and(SCM, 'scmResourceGroup == changes')),
-    item('addAll', 'inline', and(SCM, 'scmResourceGroup == unversioned')),
-    item('revertAll', '1_edit', and(SCM, 'scmResourceGroup == changes')),
-    item('addAll', '1_edit', and(SCM, 'scmResourceGroup == unversioned')),
+    ...item('revertAll', 'inline', and(SCM, 'scmResourceGroup == changes')),
+    ...item('addAll', 'inline', and(SCM, 'scmResourceGroup == unversioned')),
+    ...item('revertAll', '1_edit', and(SCM, 'scmResourceGroup == changes')),
+    ...item('addAll', '1_edit', and(SCM, 'scmResourceGroup == unversioned')),
   ],
   'scm/resourceState/context': [
-    item('openFile', 'inline@1', SCM),
-    item('revert', 'inline@2', and(SCM, 'scmResourceState != unversioned')),
-    item('add', 'inline@2', and(SCM, 'scmResourceState == unversioned')),
-    item('commit', '1_commit@1', and(SCM, 'scmResourceState != unversioned')),
-    item('diff', '2_view@1', and(SCM, 'scmResourceState != unversioned')),
-    item('log', '2_view@2', and(SCM, 'scmResourceState != unversioned')),
-    item('add', '3_edit@1', and(SCM, 'scmResourceState == unversioned')),
-    item('revert', '3_edit@2', and(SCM, 'scmResourceState != unversioned')),
-    item('resolve', '3_edit@3', and(SCM, 'scmResourceState == conflicted')),
-    item('delete', '3_edit@4', SCM),
-    item('ignore', '3_edit@5', and(SCM, 'scmResourceState == unversioned')),
-    { submenu: 'svnTools.tortoise', group: '4_tortoise@1', when: SCM },
+    ...item('openFile', 'inline@1', SCM),
+    ...item('revert', 'inline@2', and(SCM, 'scmResourceState != unversioned')),
+    ...item('add', 'inline@2', and(SCM, 'scmResourceState == unversioned')),
+    ...item('commit', '1_commit@1', and(SCM, 'scmResourceState != unversioned')),
+    ...item('diff', '2_view@1', and(SCM, 'scmResourceState != unversioned')),
+    ...item('diffRevision', '2_view@2', and(SCM, 'scmResourceState != unversioned')),
+    ...item('log', '2_view@3', and(SCM, 'scmResourceState != unversioned')),
+    ...item('add', '3_edit@1', and(SCM, 'scmResourceState == unversioned')),
+    ...item('revert', '3_edit@2', and(SCM, 'scmResourceState != unversioned')),
+    ...item('resolve', '3_edit@3', and(SCM, 'scmResourceState == conflicted')),
+    ...item('submenu:delete', '3_edit@4', SCM),
+    ...item('ignore', '3_edit@5', and(SCM, 'scmResourceState == unversioned')),
+    ...item('submenu:tortoise', '4_tortoise@1', SCM),
   ],
-  // 그룹·패널 전용 명령은 팔레트에서 숨긴다.
-  commandPalette: commands.map((c) => ({
-    command: c.command,
-    when: /\.(revertAll|addAll|openFile|commitAll)$/.test(c.command) ? 'false' : 'svnTools.active',
-  })),
+  // 팔레트에는 설정 언어 쪽만 보인다. 그룹·패널 전용 명령은 숨긴다.
+  commandPalette: commands.map((c) => {
+    const lang = c.command.split('.').pop();
+    const hidden = /\.(revertAll|addAll|openFile|commitAll)\.\w+$/.test(c.command);
+    return { command: c.command, when: hidden ? 'false' : and(langWhen(lang), 'svnTools.active') };
+  }),
 };
+// 언어별 하위 메뉴의 내용
+for (const lang of LANGUAGES) {
+  const only = (items) => items.filter((x) => x.when.startsWith(langWhen(lang)));
+  menus[`svnTools.svn.${lang}`] = only(SVN_SUBMENU.flatMap(([id, group]) => item(id, group)));
+  menus[`svnTools.tortoise.${lang}`] = only(TORTOISE.flatMap(([id], i) => item(`tortoise.${id}`, `${TORTOISE_GROUPS[id]}@${i}`)));
+  menus[`svnTools.delete.${lang}`] = only(DELETE_SUBMENU.flatMap(([id, group]) => item(id, group)));
+}
 
 const configuration = {
   title: 'SVN Tools',
   properties: {
+    'svnTools.menuLanguage': {
+      type: 'string', enum: ['en', 'ko'], default: 'en',
+      enumDescriptions: ['English', '한국어'],
+      description: '메뉴·버튼·Source Control 그룹 이름의 언어 / Language of menus, buttons and Source Control group names',
+    },
     'svnTools.language': {
       type: 'string', enum: ['en', 'ko'], default: 'en',
       enumDescriptions: ['English', '한국어'],
-      description: '알림·확인 창·화면 문구의 언어(메뉴는 영어 고정) / Language of messages, dialogs and views (menus are always English)',
-    },
-    'svnTools.delete.keepLocal': {
-      type: 'boolean', default: true,
-      description: 'SVN에서 삭제할 때 로컬 파일은 남긴다(svn delete --keep-local) / Keep local files when deleting from SVN',
+      description: '알림·확인 창·화면 문구의 언어 / Language of messages, dialogs and views',
     },
     'svnTools.commit.checkOutOfDate': {
       type: 'boolean', default: true,
@@ -212,10 +248,7 @@ const colors = COLORS.map(([id, base, description]) => ({
 pkg.contributes = {
   commands,
   colors,
-  submenus: [
-    { id: 'svnTools.svn', label: 'SVN' },
-    { id: 'svnTools.tortoise', label: 'TortoiseSVN' },
-  ],
+  submenus: LANGUAGES.flatMap((lang) => SUBMENUS.map(([id, en, ko]) => ({ id: `svnTools.${id}.${lang}`, label: lang === 'ko' ? ko : en }))),
   menus,
   configuration,
 };

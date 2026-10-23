@@ -1,6 +1,6 @@
 'use strict';
 // 알림·확인 창·웹뷰 화면 문구의 한글/영어 표(설정 svnTools.language, 기본 영어).
-// 메뉴·명령 이름과 Source Control 그룹 이름은 영어로 고정이라 여기 없다(manifest.js, repository.js).
+// 메뉴·명령 이름은 svnTools.menuLanguage로 따로 고르고 manifest.js에 있다(그룹 이름은 repository.js).
 const vscode = require('vscode');
 
 const MESSAGES = {
@@ -82,6 +82,10 @@ const MESSAGES = {
     diffRevWorking: '{0} (r{1} ↔ 작업본)',
     diffRevs: '{0} (r{1} ↔ r{2})',
     diffNotVersioned: '비교할 이전 버전이 없습니다(새로 추가했거나 미등록).',
+    diffRevPickTitle: '{0} — 비교할 리비전 선택',
+    diffRevEnter: '리비전 직접 입력…',
+    diffRevPrompt: '리비전 번호, 또는 HEAD·PREV·BASE·COMMITTED·{2026-10-01} 같은 svn 리비전 표기',
+    diffRevInvalid: '숫자 또는 HEAD·PREV·BASE·COMMITTED·{날짜}를 입력하세요.',
     running: 'SVN: {0}…',
     yes: '예',
     viewTitle: 'SVN 무시 목록',
@@ -244,6 +248,10 @@ const MESSAGES = {
     diffRevWorking: '{0} (r{1} ↔ Working)',
     diffRevs: '{0} (r{1} ↔ r{2})',
     diffNotVersioned: 'There is no earlier version to compare (newly added or unversioned).',
+    diffRevPickTitle: 'Compare {0} with a revision',
+    diffRevEnter: 'Enter a revision…',
+    diffRevPrompt: 'Revision number, or an svn revision keyword such as HEAD, PREV, BASE, COMMITTED, {2026-10-01}',
+    diffRevInvalid: 'Enter a number or HEAD, PREV, BASE, COMMITTED, {date}.',
     running: 'SVN: {0}…',
     yes: 'Yes',
     viewTitle: 'SVN Ignore Lists',

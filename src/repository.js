@@ -80,11 +80,12 @@ class Repository {
     this.disposables.push(watcher);
   }
 
-  // 그룹 이름은 svn 상태 이름이라 메뉴처럼 영어로 고정한다. 입력칸 안내만 설정 언어를 따른다.
+  // 그룹 이름은 메뉴처럼 svnTools.menuLanguage를, 입력칸 안내는 svnTools.language를 따른다.
   applyLanguage() {
-    this.conflicts.label = 'Conflicts';
-    this.changes.label = 'Changes';
-    this.unversioned.label = 'Unversioned';
+    const ko = vscode.workspace.getConfiguration('svnTools').get('menuLanguage', 'en') === 'ko';
+    this.conflicts.label = ko ? '충돌' : 'Conflicts';
+    this.changes.label = ko ? '변경' : 'Changes';
+    this.unversioned.label = ko ? '미등록' : 'Unversioned';
     this.sourceControl.inputBox.placeholder = t('commitPlaceholder');
   }
 

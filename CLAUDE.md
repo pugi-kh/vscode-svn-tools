@@ -17,7 +17,7 @@ VS Code용 SVN 확장. Source Control 패널, 탐색기 우클릭(SVN / Tortoise
 |---|---|
 | `manifest.js` | **package.json 생성기.** 명령·메뉴·설정·색상·버전은 여기서 고친다 |
 | `package.json` | 생성물. **직접 고치지 않는다** |
-| `src/extension.js` | 시작, 작업 사본 찾기, 명령 등록, 이전 버전 내용 제공(`svn-tools:` 스킴) |
+| `src/extension.js` | 시작, 작업 사본 찾기, 명령 등록(기본 ID + `.en`/`.ko`), 이전 버전 내용 제공(`svn-tools:` 스킴) |
 | `src/repository.js` | 작업 폴더 하나의 상태(`svn status --no-ignore`)와 Source Control 패널, 파일 감시 |
 | `src/commands.js` | 명령 처리. 인자 모양 맞추기(`toUris`), 커밋 흐름, 로그, ignore 추가 등 |
 | `src/decorations.js` | 탐색기 배지·색 |
@@ -26,15 +26,17 @@ VS Code용 SVN 확장. Source Control 패널, 탐색기 우클릭(SVN / Tortoise
 | `src/ignoreView.js` | 무시 목록 편집 화면(웹뷰, 저장 버튼 방식) |
 | `src/reasonView.js` | 무시된 원인 화면(웹뷰, 규칙 카드) |
 | `src/tortoise.js` | TortoiseProc.exe 실행 |
-| `src/i18n.js` | 알림·확인 창·웹뷰 문구 한/영 (메뉴는 영어 고정이라 없음) |
+| `src/i18n.js` | 알림·확인 창·웹뷰 문구 한/영 (메뉴 이름은 manifest.js) |
+| `src/languages.js` | 메뉴 언어 목록(`en`, `ko`) |
 | `test/svn-paths.js` | 한글·공백 경로 회귀 검사 |
+| `test/manifest-check.js` | 메뉴 구조 일관성 검사(명령·하위 메뉴·처리 함수·언어 섞임) |
 
 외부 패키지가 없다(Node 기본 모듈만). 빌드 단계도 없다 — `manifest.js`가 package.json만 만든다.
 
 ## 자주 쓰는 명령
 
 ```
-npm test                                             # 한글·공백 경로 회귀 검사 (실제 작업 사본은 안 건드림)
+npm test                                             # 한글·공백 경로 회귀 검사(실제 작업 사본은 안 건드림) + 메뉴 구조 검사
 npm run package                                      # package.json 생성 + .vsix
 code --install-extension vscode-svn-tools-<버전>.vsix   # 설치 → VS Code에서 Developer: Reload Window
 for f in src/*.js; do node --check "$f"; done        # 문법만 빠르게 (git bash)
@@ -72,11 +74,16 @@ for f in src/*.js; do node --check "$f"; done        # 문법만 빠르게 (git 
     셸 heredoc으로 JS를 만들면 `\r\n` 같은 이스케이프가 실제 줄바꿈으로 바뀌는 일도 있었다 — 테스트·코드는 파일로 직접 쓴다.
 
 ## 설계 결정 (왜 이렇게 했나)
-- **메뉴는 영어 고정, 문구만 언어 설정**(사용자 결정 2026-10-23): 메뉴·명령 이름과 Source Control 그룹 이름(Conflicts /
-  Changes / Unversioned)은 영어로 고정한다 — svn 용어는 영어가 익숙하고 TortoiseSVN 메뉴와 맞는다. 알림·확인 창·웹뷰 문구만
-  `svnTools.language`(기본 `en` — 마켓플레이스 사용자 대부분이 영어권이라. 한국어 사용자는 설정에서 `ko`)를 따른다. 예전에는 메뉴까지 언어를 바꾸려고 명령을 `.ko`/`.en` 두 벌 등록했는데(0.6.x까지),
-  메뉴를 고정하면서 걷어냈다. **메뉴 이름을 다시 언어별로 바꾸려면 그 장치(명령 두 벌 + `config.svnTools.language` 조건)가
-  필요하다** — VS Code는 메뉴 이름을 package.json 고정 문자열로만 받는다.
+- **메뉴 언어와 문구 언어를 따로 고른다**(사용자 결정 2026-10-23): `svnTools.menuLanguage`(메뉴·버튼·Source Control 그룹 이름)와
+  `svnTools.language`(알림·확인 창·웹뷰 문구). 둘 다 기본 `en`(마켓플레이스 사용자 대부분이 영어권). 사용자는 메뉴 영어 + 문구 한국어로 쓴다.
+  VS Code는 메뉴 이름을 package.json 고정 문자열로만 받아서, 명령마다 `svnTools.<id>.en` / `.ko`를 등록하고 메뉴에
+  `config.svnTools.menuLanguage == '<lang>'` 조건을 붙인다(`manifest.js`가 펼친다). 하위 메뉴도 언어별로 둔다
+  (`svnTools.svn.en` 등 — 하위 메뉴 이름도 고정 문자열이라). 처리 함수는 기본 ID와 두 언어 ID에 같은 것을 묶는다(`extension.js`).
+  0.7.0에서 메뉴를 영어로 고정하며 이 장치를 걷어냈다가 0.8.0에서 되살렸다.
+- **자주 쓰는 명령은 우클릭 최상위**(사용자 결정): SVN Update, SVN Commit…, SVN Add, SVN Ignore…는 하위 메뉴 없이 바로 보인다.
+  다른 확장 메뉴와 섞이므로 이름 앞에 "SVN"을 붙인다. SVN 하위 메뉴에서는 빼서 중복을 없앴다.
+- **추가 선택이 필요한 명령은 한 단계 더 들어가서 고른다**(사용자 결정): Delete ▸ Keep Local File / Delete Local File Too.
+  설정(`svnTools.delete.keepLocal`, 0.7.0까지)으로 두지 않는다 — 매번 상황에 맞게 고르게.
 - **패널 범위 = VS Code에서 연 폴더**: 작업 사본 루트가 위에 있어도(예: 여러 프로젝트를 담은 상위 폴더) 연 폴더 안만 본다.
   다른 프로젝트 변경이 섞이지 않게. Cleanup만 작업 사본 루트(`wcRoot`)에서 돈다.
 - **새로고침**: 파일 감시(무시된 경로·`.svn`·`.git` 안의 변경은 건너뜀 — 수집 로그처럼 계속 바뀌는 폴더가 status를 계속
@@ -95,7 +102,6 @@ for f in src/*.js; do node --check "$f"; done        # 문법만 빠르게 (git 
   범위만 본다(무시된 폴더 안쪽은 svn이 알려 주지 않으므로 빠질 수 있다).
 - **패턴에 공백을 쓰지 않는다**(사용자 결정): `svn:ignore`는 줄 단위라 공백이 가능하지만, 종류마다 규칙이 다르면 헷갈려서 모든
   입력에서 막고 `?`를 쓰게 한다. 다른 도구로 만든 공백 패턴은 그대로 읽고 지울 수 있다. 와일드카드 안내 한 줄을 입력 근처에 둔다.
-- **삭제 기본값은 로컬 유지**(`--keep-local`): 사용자 결정. 설정 `svnTools.delete.keepLocal`.
 - **색상은 자기 색상 ID**(`svnTools.*Foreground`, 기본값은 git 색 ID): 사용자가 `workbench.colorCustomizations`로 git 색과 따로
   바꿀 수 있게. 별도 색 설정 화면은 만들지 않는다.
 - **Lock/Unlock은 2순위**: 직접 구현하지 않고 TortoiseSVN 메뉴로 쓴다.
@@ -104,7 +110,8 @@ for f in src/*.js; do node --check "$f"; done        # 문법만 빠르게 (git 
 
 **명령을 추가할 때**
 1. `src/commands.js`의 반환 객체에 처리 함수를 추가한다. 알림·확인 창 문구는 `src/i18n.js`에 **ko·en 둘 다** 넣는다.
-2. `manifest.js`의 `COMMANDS`에 `[id, 영어 이름, 아이콘]`을 넣고, 보일 메뉴(`SVN_SUBMENU`, `menus`)에 추가한다.
+2. `manifest.js`의 `COMMANDS`에 `[id, 영어, 한국어, 아이콘]`을 넣고, 보일 메뉴(`TOP_LEVEL`, `SVN_SUBMENU`, `menus`)에 추가한다.
+   `npm test`의 메뉴 구조 검사가 빠진 명령·처리 함수·언어 섞임을 잡는다.
 3. svn에 넘기는 경로는 `paths(args)` 또는 `svn.realPath()`를 거친다. 값·메시지는 인자로 넘긴다(함정 1·2).
 4. svn에 쓰는 명령이면 `test/svn-paths.js`에 한 줄 추가하고 `npm test`.
 

@@ -1,5 +1,13 @@
 # 변경 기록
 
+## 0.8.0 (2026-10-23)
+
+- 메뉴 언어 설정 `svnTools.menuLanguage` 추가(메뉴·버튼·Source Control 그룹 이름). 문구 언어 `svnTools.language`와 따로 선택.
+- 자주 쓰는 명령(SVN Update, SVN Commit…, SVN Add, SVN Ignore…)을 탐색기·편집기 탭 우클릭 최상위로 이동.
+- Delete를 하위 메뉴로 변경(Keep Local File / Delete Local File Too). 설정 `svnTools.delete.keepLocal` 삭제.
+- Compare with Revision… 추가. 리비전 직접 입력(숫자, HEAD·PREV·BASE·COMMITTED·{날짜}) 또는 최근 로그에서 선택해 작업본과 비교.
+- 메뉴 구조 일관성 검사(`test/manifest-check.js`)를 `npm test`에 추가.
+
 ## 0.7.0 (2026-10-23)
 
 - 메뉴·명령 이름을 영어로 고정(탐색기 SVN / TortoiseSVN 메뉴, Source Control 패널 버튼·그룹 이름, 명령 팔레트).

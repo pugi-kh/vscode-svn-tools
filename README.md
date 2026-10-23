@@ -4,36 +4,41 @@ VS Code에서 SVN을 쓰기 위한 확장. Source Control 패널, 탐색기 우�
 탐색기 상태 표시(무시된 파일 회색 포함)를 한 확장으로 제공한다.
 
 - ID: `khoon.vscode-svn-tools`
-- **메뉴·명령 이름은 영어로 고정**이다(svn 용어와 TortoiseSVN 메뉴에 맞춘다). 알림·확인 창·화면 문구는 설정
-  `svnTools.language`(기본 영어, 한국어는 `ko`)를 따른다.
+- 언어는 두 가지를 따로 고른다: 메뉴·버튼·Source Control 그룹 이름은 `svnTools.menuLanguage`, 알림·확인 창·화면 문구는
+  `svnTools.language`. 둘 다 기본 영어이고 한국어는 `ko`. 이 문서는 메뉴를 영어 이름으로 적는다.
 - 필요: SVN 명령줄 클라이언트(`svn`). PATH에 없으면 TortoiseSVN에 딸린 `svn.exe`를 쓴다.
   TortoiseSVN 메뉴를 쓰려면 TortoiseSVN이 설치돼 있어야 한다.
 
 ## 기능
 
 ### Source Control 패널
-- 변경 목록을 **Conflicts / Changes / Unversioned** 세 그룹으로 보여 준다. 파일을 누르면 BASE와 비교한다.
+- 변경 목록을 **Conflicts / Changes / Unversioned**(메뉴 언어가 한국어면 충돌 / 변경 / 미등록) 세 그룹으로 보여 준다. 파일을 누르면 BASE와 비교한다.
 - 메시지 입력 → 커밋(✓ 또는 Ctrl+Enter). 위쪽 버튼: Commit, Update, Refresh. `…`에 Show Log, Clean Up,
   Edit Ignore Lists…, TortoiseSVN 메뉴.
 - 파일 옆 버튼: Open File, Revert(미등록이면 Add). 그룹 옆 버튼: Revert All / Add All.
 - 편집기 줄 번호 옆에 바뀐 줄 표시(BASE 기준).
 
-### 탐색기 우클릭 → SVN
-| 메뉴 | 동작 |
-|---|---|
-| Update / Commit… | 선택한 파일·폴더만 업데이트·커밋 |
-| Compare with BASE | 파일은 비교 화면, 폴더는 `svn diff` 결과 |
-| Show Log | 이력 목록 → 리비전을 고르면 작업본과 비교 / 그 리비전의 변경 보기 / 바뀐 파일 목록 / 메시지 복사 |
-| Add | 폴더를 고르면 안의 미등록 항목까지(무시된 것은 제외) |
-| Delete | 기본은 **로컬 파일 유지**(`--keep-local`). 설정으로 바꾼다 |
-| Rename (keep history) | `svn move`라 이력이 이어진다 |
-| Revert | 확인 후 되돌린다(복구 불가) |
-| Resolve Conflict… | 지금 파일 그대로 / 내 것 / 서버 것 / 충돌 부분만 내 것·서버 것 / TortoiseSVN 충돌 편집기 |
-| Add to Ignore List… | 이름·확장자·직접 입력 → 적용 범위(아래) |
-| Show Ignore Reason… | 어떤 규칙(패턴) 때문에 무시되는지 카드로 보여 주고, 고칠 수 있는 규칙은 그 자리에서 지운다(아래) |
-| Edit Ignore Lists… | 무시 목록 편집 화면(아래) |
-| Clean Up | 작업 사본 루트에서 실행 |
-| Copy SVN URL | 저장소 주소를 클립보드로 |
+### 탐색기 우클릭
+자주 쓰는 네 가지는 하위 메뉴 없이 바로 보인다. 나머지는 **SVN**, **TortoiseSVN** 하위 메뉴에 있다.
+
+| 위치 | 메뉴 | 동작 |
+|---|---|---|
+| 바로 | SVN Update / SVN Commit… | 선택한 파일·폴더만 업데이트·커밋 |
+| 바로 | SVN Add | 폴더를 고르면 안의 미등록 항목까지(무시된 것은 제외) |
+| 바로 | SVN Ignore… | 이름·확장자·직접 입력 → 적용 범위(아래) |
+| SVN ▸ | Compare with BASE | 파일은 비교 화면, 폴더는 `svn diff` 결과 |
+| SVN ▸ | Compare with Revision… | 맨 위 "리비전 직접 입력…"(숫자, `HEAD`·`PREV`·`BASE`·`COMMITTED`·`{날짜}`) 또는 아래 최근 로그에서 골라 작업본과 비교 |
+| SVN ▸ | Show Log | 이력 목록 → 리비전을 고르면 작업본과 비교 / 그 리비전의 변경 보기 / 바뀐 파일 목록 / 메시지 복사 |
+| SVN ▸ Delete ▸ | Keep Local File / Delete Local File Too | SVN에서 빼면서 로컬 파일을 남길지(`--keep-local`) 지울지 고른다 |
+| SVN ▸ | Rename (keep history) | `svn move`라 이력이 이어진다 |
+| SVN ▸ | Revert | 확인 후 되돌린다(복구 불가) |
+| SVN ▸ | Resolve Conflict… | 지금 파일 그대로 / 내 것 / 서버 것 / 충돌 부분만 내 것·서버 것 / TortoiseSVN 충돌 편집기 |
+| SVN ▸ | Show Ignore Reason… | 어떤 규칙(패턴) 때문에 무시되는지 카드로 보여 주고, 고칠 수 있는 규칙은 그 자리에서 지운다(아래) |
+| SVN ▸ | Edit Ignore Lists… | 무시 목록 편집 화면(아래) |
+| SVN ▸ | Clean Up | 작업 사본 루트에서 실행 |
+| SVN ▸ | Copy SVN URL | 저장소 주소를 클립보드로 |
+
+편집기 탭 우클릭에도 같은 메뉴가 있다. Source Control 패널의 파일 우클릭에도 Commit, Compare, Show Log, Revert, Delete ▸ 등이 있다.
 
 **무시 목록 적용 범위**
 
@@ -109,8 +114,8 @@ Get Lock / Release Lock, Clean Up, Settings.
 
 | 설정 | 기본값 | 설명 |
 |---|---|---|
-| `svnTools.language` | `en` | 알림·확인 창·화면 문구 언어 (`en` / `ko`). 메뉴는 영어 고정 |
-| `svnTools.delete.keepLocal` | `true` | 삭제 시 로컬 파일 유지 |
+| `svnTools.menuLanguage` | `en` | 메뉴·버튼·Source Control 그룹 이름 언어 (`en` / `ko`) |
+| `svnTools.language` | `en` | 알림·확인 창·화면 문구 언어 (`en` / `ko`) |
 | `svnTools.commit.checkOutOfDate` | `true` | 커밋 전 서버 변경 확인 |
 | `svnTools.scm.fadeUnversioned` | `true` | Source Control 패널에서 미등록 파일을 흐리게 |
 | `svnTools.decorations.enabled` | `true` | 탐색기 상태 표시 |
@@ -177,7 +182,7 @@ VS Code 밖(TortoiseSVN 등)에서 바꾼 것은 창으로 돌아올 때 반영�
 ### 빌드와 설치
 
 ```
-npm test                                             # 한글·공백 경로 회귀 검사 (임시 폴더에 테스트 저장소를 만들어 돌림)
+npm test                                             # 한글·공백 경로 회귀 검사 + 메뉴 구조 검사
 npm run package                                      # package.json 생성 + vscode-svn-tools-<버전>.vsix 생성
 code --install-extension vscode-svn-tools-<버전>.vsix   # 설치(같은 ID면 덮어쓴다)
 ```
@@ -193,7 +198,8 @@ code --install-extension vscode-svn-tools-<버전>.vsix   # 설치(같은 ID면 
 - **버전**: `manifest.js`의 `version`을 올리고 `CHANGELOG.md`에 항목을 추가한 뒤 빌드한다.
 - 문법만 빠르게 볼 때: `for f in src/*.js; do node --check "$f"; done` (git bash)
 
-메뉴·명령 이름은 `manifest.js`에 영어로 고정돼 있다. 알림·확인 창·화면 문구(한/영)는 `src/i18n.js`에 있다.
+메뉴 이름(한/영)은 `manifest.js`에, 알림·확인 창·화면 문구(한/영)는 `src/i18n.js`에 있다. 메뉴 이름을 설정으로 바꾸려고
+명령을 `svnTools.<id>.en` / `.ko` 두 벌 등록한다(VS Code는 메뉴 이름을 package.json 고정 문자열로만 받는다).
 
 | 파일 | 역할 |
 |---|---|
@@ -209,6 +215,7 @@ code --install-extension vscode-svn-tools-<버전>.vsix   # 설치(같은 ID면 
 | `src/tortoise.js` | TortoiseSVN 창 열기 |
 | `src/i18n.js` | 메시지 한글/영어 |
 | `test/svn-paths.js` | 한글·공백 경로 회귀 검사 (`npm test`) |
+| `test/manifest-check.js` | 메뉴 구조 일관성 검사 (`npm test`) |
 
 ## 라이선스와 출처
 

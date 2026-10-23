@@ -193,11 +193,73 @@ function createCommands(ctx) {
     await vscode.commands.executeCommand('vscode.diff', baseUri(p, 'BASE'), uri, t('diffBase', path.basename(p)));
   }
 
-  // 폴더 비교는 svn diff 텍스트를 diff 문서로 보여 준다.
-  async function showTextDiff(repo, targets) {
-    const { stdout } = await svn.exec(['diff', ...targets], repo.folder);
+  // 폴더 비교는 svn diff 텍스트를 diff 문서로 보여 준다. rev를 주면 그 리비전과 작업본을 비교한다.
+  async function showTextDiff(repo, targets, rev) {
+    const { stdout } = await svn.exec(['diff', ...(rev ? ['-r', String(rev)] : []), ...targets], repo.folder);
     const doc = await vscode.workspace.openTextDocument({ content: stdout || '(no changes)', language: 'diff' });
     await vscode.window.showTextDocument(doc, { preview: true });
+  }
+
+  // 리비전 지정 비교: 맨 위 "직접 입력", 그 아래 최근 로그. 고른 리비전과 작업본을 비교한다.
+  const REV_PATTERN = /^(\d+|HEAD|BASE|COMMITTED|PREV|\{[^}]+\})$/i;
+
+  async function diffRevision(uri) {
+    const p = svn.realPath(uri.fsPath);
+    const repo = repoFor(p);
+    if (!repo) return;
+    const entries = await step('log', () => fetchLog(repo, p)).catch(() => []);
+    const enter = { label: `$(edit) ${t('diffRevEnter')}`, enter: true };
+    const items = entries.map((e) => ({
+      label: `r${e.revision}`,
+      description: `${e.author}  ${e.date.replace('T', ' ').slice(0, 16)}`,
+      detail: e.message.split(/\r?\n/)[0],
+      rev: String(e.revision),
+    }));
+    const pick = await vscode.window.showQuickPick([enter, ...items], {
+      title: t('diffRevPickTitle', path.basename(p)), matchOnDescription: true, matchOnDetail: true,
+    });
+    if (!pick) return;
+    let rev = pick.rev;
+    if (pick.enter) {
+      rev = await vscode.window.showInputBox({
+        prompt: t('diffRevPrompt'),
+        validateInput: (v) => (REV_PATTERN.test(v.trim()) ? undefined : t('diffRevInvalid')),
+      });
+      if (!rev) return;
+      rev = rev.trim();
+    }
+    if (isDir(p)) return showTextDiff(repo, [p], rev);
+    await vscode.commands.executeCommand('vscode.diff', baseUri(p, rev), vscode.Uri.file(p),
+      t('diffRevWorking', path.basename(p), rev));
+  }
+
+  // SVN에서 삭제. keepLocal: 로컬 파일을 남길지(메뉴에서 고른다, 설정은 두지 않는다).
+  async function deleteItems(args, keepLocal) {
+    const list = paths(args);
+    if (list.length === 0) return vscode.window.showWarningMessage(t('noSelection'));
+    const repo = repoFor(list[0]);
+    if (!repo) return;
+    const unversioned = list.filter((p) => ['?', 'I'].includes(repo.statusOf(p)));
+    const versioned = list.filter((p) => !unversioned.includes(p));
+
+    if (versioned.length > 0) {
+      const ask = keepLocal ? t('deleteAskKeep', versioned.length) : t('deleteAskLocal', versioned.length);
+      if (await confirm(ask, t('deleteYes'), versioned.map((p) => path.basename(p)).join('\n'))) {
+        // --force: 수정·추가 상태도 뺀다. 로컬 유지면 파일은 그대로 남는다.
+        const flags = keepLocal ? ['--keep-local', '--force'] : ['--force'];
+        await step('delete', () => svn.exec(['delete', ...flags, ...versioned], repo.folder));
+        vscode.window.showInformationMessage(keepLocal ? t('deleteDoneKeep') : t('deleteDoneLocal'));
+      }
+    }
+    if (unversioned.length > 0) {
+      if (keepLocal) {
+        vscode.window.showInformationMessage(t('deleteUnversionedKeep', unversioned.map((p) => path.basename(p)).join(', ')));
+      } else if (await confirm(t('deleteUnversionedLocalAsk', unversioned.length), t('deleteYes'))) {
+        for (const p of unversioned) {
+          await vscode.workspace.fs.delete(vscode.Uri.file(p), { recursive: true, useTrash: true });
+        }
+      }
+    }
   }
 
   async function openChange(uri) {
@@ -326,6 +388,12 @@ function createCommands(ctx) {
       for (const u of uris) await diffBase(u);
     }),
 
+    diffRevision: command(async (...args) => {
+      const [uri] = toUris(args);
+      if (!uri) return vscode.window.showWarningMessage(t('noSelection'));
+      await diffRevision(uri);
+    }),
+
     openChange: command(async (uri) => openChange(uri)),
 
     openFile: command(async (...args) => {
@@ -372,34 +440,8 @@ function createCommands(ctx) {
       vscode.window.showInformationMessage(t('addDone', list.length));
     }),
 
-    delete: command(async (...args) => {
-      const list = paths(args);
-      if (list.length === 0) return vscode.window.showWarningMessage(t('noSelection'));
-      const repo = repoFor(list[0]);
-      if (!repo) return;
-      const keepLocal = vscode.workspace.getConfiguration('svnTools').get('delete.keepLocal', true);
-      const unversioned = list.filter((p) => ['?', 'I'].includes(repo.statusOf(p)));
-      const versioned = list.filter((p) => !unversioned.includes(p));
-
-      if (versioned.length > 0) {
-        const ask = keepLocal ? t('deleteAskKeep', versioned.length) : t('deleteAskLocal', versioned.length);
-        if (await confirm(ask, t('deleteYes'), versioned.map((p) => path.basename(p)).join('\n'))) {
-          // --force: 수정·추가 상태도 뺀다. 로컬 유지면 파일은 그대로 남는다.
-          const flags = keepLocal ? ['--keep-local', '--force'] : ['--force'];
-          await step('delete', () => svn.exec(['delete', ...flags, ...versioned], repo.folder));
-          vscode.window.showInformationMessage(keepLocal ? t('deleteDoneKeep') : t('deleteDoneLocal'));
-        }
-      }
-      if (unversioned.length > 0) {
-        if (keepLocal) {
-          vscode.window.showInformationMessage(t('deleteUnversionedKeep', unversioned.map((p) => path.basename(p)).join(', ')));
-        } else if (await confirm(t('deleteUnversionedLocalAsk', unversioned.length), t('deleteYes'))) {
-          for (const p of unversioned) {
-            await vscode.workspace.fs.delete(vscode.Uri.file(p), { recursive: true, useTrash: true });
-          }
-        }
-      }
-    }),
+    deleteKeepLocal: command(async (...args) => deleteItems(args, true)),
+    deleteLocal: command(async (...args) => deleteItems(args, false)),
 
     rename: command(async (...args) => {
       const [uri] = toUris(args);
