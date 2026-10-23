@@ -1,0 +1,4 @@
+# 빌드 결과물 (npm run package가 만든다)
+*.vsix
+
+node_modules/

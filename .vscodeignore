@@ -1,0 +1,5 @@
+manifest.js
+*.vsix
+.vscode/**
+.git/**
+.gitignore
