@@ -113,6 +113,13 @@ function createRepo() {
     await ignore.setProp('svn:ignore', sub, []);
     return got;
   }, '["my file","*.tmp"]');
+  // global-ignores는 공백에서 나뉜다 — 공백 든 패턴을 그대로 넣으면 다른 패턴 둘이 된다(그래서 global에서는 막는다).
+  await check('svn:global-ignores 공백은 패턴을 나눔', async () => {
+    await svn.exec(['propset', 'svn:global-ignores', 'my file', sub], wc);
+    const got = JSON.stringify(await ignore.getProp('svn:global-ignores', sub));
+    await ignore.setProp('svn:global-ignores', sub, []);
+    return got;
+  }, '["my","file"]');
   await check('레지스트리 출력 해석', () => JSON.stringify(ignore.parseRegQuery([
     '',
     'HKEY_CURRENT_USER\\Software\\Tigris.org\\Subversion\\Config\\miscellany',
@@ -133,6 +140,106 @@ function createRepo() {
     }, '[]');
     cp.execFileSync('reg', ['delete', 'HKCU\\Software\\svn-tools-test', '/f'], { stdio: 'ignore' });
   }
+  // Add 하위 항목 제외(--depth empty): 폴더만 등록되고 안의 파일은 미등록으로 남는다
+  const emptyDir = path.join(wc, '빈 등록 폴더');
+  fs.mkdirSync(emptyDir);
+  fs.writeFileSync(path.join(emptyDir, '안의 파일.txt'), 'x');
+  await check('add --depth empty', async () => {
+    await svn.exec(['add', '--depth', 'empty', '--force', '--parents', emptyDir], wc);
+    const st = svn.parseStatus((await svn.exec(['status', '--xml', emptyDir], wc)).stdout);
+    return st.map((e) => `${e.item}:${path.basename(e.path)}`).sort().join(',');
+  }, 'added:빈 등록 폴더,unversioned:안의 파일.txt');
+  await check('add 하위 항목 포함(이미 등록된 폴더)', async () => {
+    await svn.exec(['add', '--force', '--parents', emptyDir], wc);
+    const st = svn.parseStatus((await svn.exec(['status', '--xml', emptyDir], wc)).stdout);
+    return st.map((e) => `${e.item}:${path.basename(e.path)}`).sort().join(',');
+  }, 'added:빈 등록 폴더,added:안의 파일.txt');
+  // 스테이징 커밋의 핵심: --depth empty로 "새 폴더 + 고른 파일"만 정확히 올리고 같은 폴더의 다른 새 파일은 남긴다.
+  // 새 폴더 안의 파일만 넘기면 svn이 거부한다(E200009) — 그래서 상위 새 폴더를 함께 넣는다(commands.js newParents).
+  const stageDir = path.join(wc, '스테이징 폴더');
+  fs.mkdirSync(stageDir);
+  fs.writeFileSync(path.join(stageDir, '올릴 파일.txt'), 'a');
+  fs.writeFileSync(path.join(stageDir, '남길 파일.txt'), 'b');
+  await svn.exec(['add', stageDir], wc);
+  await check('새 폴더 안 파일만 커밋은 거부', async () => {
+    try {
+      await svn.exec(['commit', '-m', 'x', '--force-log', path.join(stageDir, '올릴 파일.txt')], wc);
+      return 'committed';
+    } catch (e) {
+      return /E200009/.test(e.stderr) ? 'E200009' : (e.stderr || e.message).split(/\r?\n/)[0];
+    }
+  }, 'E200009');
+  await check('--depth empty로 새 폴더 + 파일 하나만 커밋', async () => {
+    await svn.exec(['commit', '-m', '정확 커밋', '--force-log', '--depth', 'empty', stageDir, path.join(stageDir, '올릴 파일.txt')], wc);
+    const st = svn.parseStatus((await svn.exec(['status', '--xml', stageDir], wc)).stdout);
+    return st.map((e) => `${e.item}:${path.basename(e.path)}`).join(',');
+  }, 'added:남길 파일.txt');
+
+  // 빠른 커밋에서 무시된 항목을 "추가해서 함께 커밋"할 때: svn은 이름을 직접 준 항목이면 무시 규칙에 걸려도 추가한다.
+  // 그래서 --no-ignore를 붙이지 않는다(붙이면 고른 폴더 안의 무시 대상까지 추가된다).
+  await ignore.setProp('svn:ignore', stageDir, ['skip*']);
+  const skipped = path.join(stageDir, 'skip 파일.txt');
+  fs.writeFileSync(skipped, 's');
+  await check('무시된 파일도 이름으로 주면 add됨', async () => {
+    await svn.exec(['add', '--force', '--parents', skipped], wc);
+    return svn.parseStatus((await svn.exec(['status', '--xml', skipped], wc)).stdout).map((e) => e.item).join(',');
+  }, 'added');
+  // 이동·복사(0.10.0): status의 moved-from/moved-to로 짝을 알고, 되돌리기·커밋은 양쪽을 함께 넘긴다(commands.js closure).
+  const mv = path.join(wc, '이동 검사');
+  fs.mkdirSync(mv);
+  const mvA = path.join(mv, '원래 이름.txt');
+  const mvB = path.join(mv, '새 이름.txt');
+  const keep = path.join(mv, '남길 파일.txt');
+  fs.writeFileSync(mvA, 'a');
+  fs.writeFileSync(keep, 'k');
+  await svn.exec(['add', mv], wc);
+  await svn.exec(['commit', '-m', '이동 검사 준비', '--force-log', mv], wc);
+  const stOf = async (dir) => svn.parseStatus((await svn.exec(['status', '--xml', dir], wc)).stdout);
+  await check('status moved-from / moved-to', async () => {
+    await svn.exec(['move', mvA, mvB], wc);
+    const st = await stOf(mv);
+    const a = st.find((e) => e.path === mvA);
+    const b = st.find((e) => e.path === mvB);
+    return `${a.item}:${a.movedTo === mvB},${b.item}:${b.copied}:${b.movedFrom === mvA}`;
+  }, 'deleted:true,added:true:true');
+  await check('이동 양쪽 revert → 원래대로', async () => {
+    await svn.exec(['revert', '--depth', 'infinity', mvA, mvB], wc);
+    fs.rmSync(mvB, { force: true });
+    return (await stOf(mv)).length;
+  }, 0);
+  // 하위 포함 스테이징: 폴더째 add --force 하면 keep-local로 지운 항목이 교체(R)가 된다. 미등록(?) 항목만 넘기면 D로 남는다.
+  await check('하위 포함 add는 ?만 — keep-local 삭제 유지', async () => {
+    await svn.exec(['delete', '--keep-local', '--force', keep], wc);
+    fs.writeFileSync(path.join(mv, '새 파일.txt'), 'n');
+    const unv = (await stOf(mv)).filter((e) => e.item === 'unversioned').map((e) => e.path);
+    await svn.exec(['add', '--force', ...unv], wc);
+    return (await stOf(mv)).map((e) => `${e.item}:${path.basename(e.path)}`).sort().join(',');
+  }, 'added:새 파일.txt,deleted:남길 파일.txt');
+  await svn.exec(['revert', '--depth', 'infinity', mv], wc);
+  // 탐색기 F2로 이름을 바꾼 뒤 SVN 이름 바꾸기로 적용: 원래 이름으로 되돌리고 svn move(commands.js applyRename).
+  await check('이름 바꾼 뒤 svn move로 적용(수정 내용 유지)', async () => {
+    fs.appendFileSync(mvA, ' 수정');
+    fs.renameSync(mvA, mvB);
+    // 관리 중이었는지는 옛 경로의 svn info로 안다(commands.js isVersioned) — 디스크에 없어도 작업 사본 DB에 남아 있다.
+    await svn.exec(['info', '--xml', mvA], wc);
+    fs.renameSync(mvB, mvA);
+    await svn.exec(['move', '--parents', mvA, mvB], wc);
+    const b = (await stOf(mv)).find((e) => e.path === mvB);
+    return `${b.item}:${b.movedFrom === mvA}:${fs.readFileSync(mvB, 'utf8')}`;
+  }, 'added:true:a 수정');
+  // 일반 add 폴더는 자식 add 없이 혼자 되돌릴 수 없다(E155038) — 스테이징 취소·Revert All이 폴더는 infinity로 되돌리는 이유.
+  await check('A 폴더 revert --depth empty는 거부', async () => {
+    const nd = path.join(mv, '새 폴더');
+    fs.mkdirSync(nd);
+    fs.writeFileSync(path.join(nd, 'x.txt'), 'x');
+    await svn.exec(['add', nd], wc);
+    try {
+      await svn.exec(['revert', '--depth', 'empty', nd], wc);
+      return 'reverted';
+    } catch (e) {
+      return /E155038/.test(e.stderr) ? 'E155038' : (e.stderr || e.message).split(/\r?\n/)[0];
+    }
+  }, 'E155038');
   await check('applyChange 병합', () => JSON.stringify(applyChange(['a', 'b', 'c', 'ext'], { edits: [{ old: 'b', new: 'B' }], removed: ['c'], added: ['d', 'a'] })), '["a","B","ext","d"]');
 
   fs.rmSync(path.dirname(base), { recursive: true, force: true });

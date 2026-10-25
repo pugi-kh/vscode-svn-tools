@@ -10,6 +10,7 @@ const FALLBACK_SVN = 'C:\\Program Files\\TortoiseSVN\\bin\\svn.exe';
 const LOCK_ERROR = /E155004|E200033|E200030/;
 const LOCK_RETRIES = 4;
 const LOCK_RETRY_MS = 250;
+const MAX_COMMAND_LINE = 30000;
 
 class SvnError extends Error {
   constructor(message, stderr, code) {
@@ -92,6 +93,12 @@ function run(file, args, cwd) {
 // 다시 해석해 한글 경로가 '???'가 된다. --encoding 없이 -F만 쓰면 이번엔 파일 내용을 CP949로 읽어 한글 값이 깨진다.
 async function exec(args, cwd) {
   const full = ['--non-interactive', ...args];
+  // 윈도우 명령줄은 약 32,767자까지다. 경로를 많이 넘기면(정확한 커밋, 여러 항목 추가 등) 넘을 수 있어 미리 막고
+  // "나눠서 진행하라"고 안내한다(commands.js의 showError). 파일 하나의 경로가 긴 것은 문제가 아니다.
+  const length = full.reduce((n, a) => n + String(a).length + 3, 0);
+  if (length > MAX_COMMAND_LINE) {
+    throw Object.assign(new Error('TOOLONG'), { code: 'TOOLONG', count: args.length });
+  }
   let file = svnPath();
   for (let attempt = 0; ; attempt++) {
     try {
@@ -145,6 +152,11 @@ function parseStatus(xml) {
       item: wc ? attr(wc[0], 'item') : 'none',
       props: wc ? attr(wc[0], 'props') : 'none',
       treeConflict: wc ? attr(wc[0], 'tree-conflicted') === 'true' : false,
+      // 복사·이동으로 추가된 항목(A +). 이동이면 반대쪽 경로가 붙는다(절대 경로로 부르면 절대 경로로 온다).
+      copied: wc ? attr(wc[0], 'copied') === 'true' : false,
+      movedFrom: wc && attr(wc[0], 'moved-from') ? path.normalize(attr(wc[0], 'moved-from')) : undefined,
+      movedTo: wc && attr(wc[0], 'moved-to') ? path.normalize(attr(wc[0], 'moved-to')) : undefined,
+      locked: wc ? attr(wc[0], 'wc-locked') === 'true' : false,
       reposItem: repos ? attr(repos[0], 'item') : undefined,
     });
   }

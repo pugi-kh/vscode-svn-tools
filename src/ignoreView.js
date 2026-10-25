@@ -21,6 +21,7 @@ const STRING_KEYS = [
   'viewUnsaved', 'viewNoChanges', 'viewOtherFolder', 'viewOtherFolderHelp', 'viewCreateCard', 'viewRestore',
   'viewAddedTag', 'viewEditedTag', 'viewRemovedTag', 'viewNewCardTag', 'viewHintIgnore', 'viewHintGlobal',
   'viewEmptyCard', 'viewRemoveCard', 'viewRemoveAll', 'viewRestoreAll', 'patternHelp', 'openTortoiseSettings',
+  'viewFolderPick', 'viewFolderPlaceholder',
 ];
 
 let current; // 화면은 하나만 연다
@@ -92,7 +93,30 @@ class IgnoreView {
     strings.viewProjectSection = t('viewProjectSection', this.repo.name);
     const target = ignore.localWriteTarget() === 'userFile' ? t('sourceUserFile') : t('targetUserRegistry');
     strings.viewLocalDefault = t('viewLocalDefault', t(SOURCE_KEY[local.source]), target);
-    return { rules, focus: this.rel(this.focusDir), local: { set: !!local.set, patterns: local.patterns }, strings };
+    return { rules, dirs: this.versionedDirs(), focus: this.rel(this.focusDir), local: { set: !!local.set, patterns: local.patterns }, strings };
+  }
+
+  // "다른 폴더에 규칙 추가"의 자동완성 후보: 규칙을 걸 수 있는(관리 중인) 폴더. 큰 작업 사본에서 느려지지 않게 개수를 자른다.
+  versionedDirs(limit = 2000) {
+    const out = [];
+    const walk = (dir) => {
+      let names;
+      try {
+        names = fs.readdirSync(dir, { withFileTypes: true });
+      } catch {
+        return;
+      }
+      for (const d of names) {
+        if (out.length >= limit) return;
+        if (!d.isDirectory() || d.name === '.svn') continue;
+        const p = path.join(dir, d.name);
+        if (['?', 'I'].includes(this.repo.statusOf(p))) continue;
+        out.push(this.rel(p));
+        walk(p);
+      }
+    };
+    walk(this.repo.folder);
+    return out;
   }
 
   async render() {
@@ -115,9 +139,12 @@ class IgnoreView {
   }
 
   async save(changes, local) {
-    const all = [...changes.flatMap((c) => [...(c.added || []), ...(c.edits || []).map((e) => e.new)]),
-      ...(local ? [...local.added, ...local.edits.map((e) => e.new)] : [])];
-    if (all.some((p) => !p || /\s/.test(p))) throw new Error(t('viewInvalidPattern'));
+    // svn:ignore는 줄 단위라 공백을 쓸 수 있다. global-ignores(폴더 속성·내 PC 전역)는 공백으로 나뉘어 다른 패턴이 된다.
+    const bad = (list, spaced) => list.some((p) => !p || (!spaced && /\s/.test(p)));
+    const newOf = (c) => [...(c.added || []), ...(c.edits || []).map((e) => e.new)];
+    if (changes.some((c) => bad(newOf(c), c.prop === 'svn:ignore')) || (local && bad(newOf(local), false))) {
+      throw new Error(t('viewInvalidPattern'));
+    }
 
     // 폴더를 모두 확인한 뒤에 쓴다(중간에 실패해 일부만 저장되는 일을 줄인다).
     const targets = changes.map((c) => ({ ...c, abs: this.resolveDir(c.dir) }));
@@ -144,6 +171,20 @@ class IgnoreView {
   async handle(m) {
     if (m.op === 'tortoise') {
       tortoise.open('settings', [], () => { if (!this.dirty) this.render(); });
+      return;
+    }
+    if (m.op === 'pickFolder') {
+      const [uri] = (await vscode.window.showOpenDialog({
+        canSelectFolders: true, canSelectFiles: false, canSelectMany: false,
+        defaultUri: vscode.Uri.file(this.repo.toUi(this.repo.folder)), openLabel: t('viewFolderPick'),
+      })) || [];
+      if (!uri) return;
+      const dir = this.repo.toReal(svn.realPath(uri.fsPath));
+      if (!isInside(dir, this.repo.folder)) {
+        vscode.window.showWarningMessage(t('viewOutside', uri.fsPath));
+        return;
+      }
+      this.panel.webview.postMessage({ type: 'picked', rel: this.rel(dir) });
       return;
     }
     if (m.op === 'dirty') {
@@ -197,6 +238,7 @@ class IgnoreView {
   input, select { background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border, transparent); padding: 3px 6px; font: inherit; }
   input.grow { flex: 1; }
   input.invalid { border-color: var(--vscode-inputValidation-errorBorder); }
+  .err { color: var(--vscode-errorForeground); font-size: .9em; }
   button { background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); border: none; padding: 3px 10px; cursor: pointer; font: inherit; }
   button.primary { background: var(--vscode-button-background); color: var(--vscode-button-foreground); }
   button:disabled { opacity: .45; cursor: default; }
@@ -212,6 +254,7 @@ let S;            // 서버에서 받은 원본
 let cards = [];   // 편집 중인 사본: [{ rel, prop, uncommitted, isNew, items: [{ value, orig, state }] }]
 let local = [];   // 내 PC 전역 편집 사본: items
 let focus = '.';
+let newDir = '';  // "다른 폴더에 규칙 추가"에 입력 중인 폴더(다시 그려도 남게)
 let lastDirty = false;
 const send = (m) => vscode.postMessage(m);
 
@@ -226,8 +269,14 @@ function el(tag, attrs, ...kids) {
   for (const kid of kids.flat()) if (kid !== null && kid !== undefined && kid !== false) e.append(kid.nodeType ? kid : String(kid));
   return e;
 }
+// 잘못된 패턴이면 테두리와 함께 이유를 입력칸 옆에 한 번만 보인다.
+function markInvalid(input) {
+  input.classList.add('invalid');
+  if (!(input.nextSibling && input.nextSibling.className === 'err')) input.after(el('span', { class: 'err' }, S.strings.viewInvalidPattern));
+}
 function onEnter(input, fn) { input.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') fn(); }); return input; }
-const valid = (p) => p && !/\\s/.test(p);
+// spaced: svn:ignore 카드(공백 허용). global-ignores 카드와 내 PC 전역은 공백 불가.
+const valid = (p, spaced) => p && (spaced || !/\\s/.test(p));
 const toItems = (list) => list.map((p) => ({ value: p, orig: p, state: 'kept' }));
 const normRel = (r) => {
   let x = (r || '').trim().replace(/\\//g, '\\\\').replace(/^\\.\\\\/, '').replace(/\\\\+$/, '');
@@ -247,9 +296,9 @@ function changeCount() {
 }
 
 // ---- 항목 조작 (화면 안에서만) ----
-function addItem(items, value) {
+function addItem(items, value, spaced) {
   value = value.trim();
-  if (!valid(value)) return false;
+  if (!valid(value, spaced)) return false;
   const existing = items.find((i) => i.value === value || i.orig === value);
   if (existing) {
     if (existing.state === 'removed') { existing.state = 'kept'; existing.value = existing.orig; }
@@ -258,9 +307,9 @@ function addItem(items, value) {
   items.push({ value, orig: undefined, state: 'added' });
   return true;
 }
-function editItem(items, item, value) {
+function editItem(items, item, value, spaced) {
   value = value.trim();
-  if (!valid(value)) return false;
+  if (!valid(value, spaced)) return false;
   if (item.state === 'added') item.value = value;
   else { item.value = value; item.state = value === item.orig ? 'kept' : 'edited'; }
   return true;
@@ -291,7 +340,7 @@ function save() {
 }
 
 // ---- 그리기 ----
-function itemRow(items, item) {
+function itemRow(items, item, spaced) {
   const L = S.strings;
   const row = el('div', { class: 'row' + (item.state === 'removed' ? ' removed' : '') });
   const tag = { added: ['added', L.viewAddedTag], edited: ['edited', L.viewEditedTag], removed: ['removed', L.viewRemovedTag] }[item.state];
@@ -303,7 +352,7 @@ function itemRow(items, item) {
   }
   const edit = () => {
     const input = el('input', { class: 'grow', value: item.value });
-    const ok = () => { if (editItem(items, item, input.value)) render(); else input.classList.add('invalid'); };
+    const ok = () => { if (editItem(items, item, input.value, spaced)) render(); else markInvalid(input); };
     onEnter(input, ok);
     row.replaceChildren(input,
       el('button', { class: 'primary', on: { click: ok } }, L.viewSave),
@@ -336,9 +385,9 @@ function cardButton(c) {
   } } }, L.viewRemoveAll);
 }
 
-function addRow(items) {
+function addRow(items, spaced) {
   const input = el('input', { class: 'grow', placeholder: S.strings.viewPattern });
-  const add = () => { if (addItem(items, input.value)) render(); else input.classList.add('invalid'); };
+  const add = () => { if (!input.value.trim()) return; if (addItem(items, input.value, spaced)) render(); else markInvalid(input); };
   onEnter(input, add);
   return el('div', { class: 'row add' }, input, el('button', { on: { click: add } }, S.strings.viewAdd));
 }
@@ -372,17 +421,21 @@ function render() {
         c.uncommitted ? el('span', { class: 'tag warn' }, L.viewUncommitted) : null,
         cardButton(c)));
     if (c.items.length === 0) card.append(el('div', { class: 'empty' }, L.viewEmptyCard));
-    for (const item of c.items) card.append(itemRow(c.items, item));
-    card.append(addRow(c.items));
+    const spaced = c.prop === 'svn:ignore';
+    for (const item of c.items) card.append(itemRow(c.items, item, spaced));
+    card.append(addRow(c.items, spaced));
     root.append(card);
   }
 
   // ---- 다른 폴더에 규칙 추가 ----
-  const dirInput = el('input', { value: focus, list: 'dirs' });
+  // 폴더는 작업 폴더 기준 경로다. 직접 쓰거나(목록에서 자동완성), [폴더 선택…]으로 고른다. 비우면 작업 폴더.
+  const dirInput = el('input', { value: newDir, list: 'dirs', placeholder: L.viewFolderPlaceholder, class: 'grow' });
+  dirInput.addEventListener('input', () => { newDir = dirInput.value; });
   const kind = el('select', {}, el('option', { value: 'svn:ignore' }, 'svn:ignore'), el('option', { value: 'svn:global-ignores' }, 'svn:global-ignores'));
   const create = () => {
     const rel = normRel(dirInput.value);
     focus = rel;
+    newDir = '';
     if (!cards.some((c) => c.rel === rel && c.prop === kind.value)) {
       cards.push({ rel, prop: kind.value, uncommitted: false, isNew: true, items: [] });
     }
@@ -393,17 +446,18 @@ function render() {
   onEnter(dirInput, create);
   root.append(el('h2', {}, L.viewOtherFolder), el('div', { class: 'help' }, L.viewOtherFolderHelp),
     el('div', { class: 'card' }, el('div', { class: 'form' },
-      L.viewFolder, dirInput, L.viewKind, kind,
+      L.viewFolder, el('div', { class: 'row' }, dirInput, el('button', { on: { click: () => send({ op: 'pickFolder' }) } }, L.viewFolderPick)),
+      L.viewKind, kind,
       el('span'), el('div', {}, el('button', { on: { click: create } }, L.viewCreateCard)))),
-    el('datalist', { id: 'dirs' }, ...[...new Set(['.', ...cards.map((c) => c.rel)])].map((d) => el('option', { value: d }))));
+    el('datalist', { id: 'dirs' }, ...[...new Set(['.', ...S.dirs])].map((d) => el('option', { value: d }))));
 
   // ---- 내 PC 전역 ----
   root.append(el('h2', {}, L.viewLocalSection), el('div', { class: 'help' }, L.viewLocalHelp));
   root.append(el('div', { class: 'help' }, L.viewLocalDefault,
     ' ', el('button', { on: { click: () => send({ op: 'tortoise' }) } }, L.openTortoiseSettings)));
   const box = el('div', { class: 'card' });
-  for (const item of local) box.append(itemRow(local, item));
-  box.append(addRow(local));
+  for (const item of local) box.append(itemRow(local, item, false));
+  box.append(addRow(local, false));
   root.append(box);
 }
 
@@ -411,6 +465,7 @@ window.addEventListener('message', (ev) => {
   const m = ev.data;
   if (m.type === 'state') { loadState(m.state); render(); scrollToFocus(); }
   if (m.type === 'focus') { focus = m.focus; render(); scrollToFocus(); }
+  if (m.type === 'picked') { newDir = m.rel === '.' ? '' : m.rel; render(); }
 });
 function scrollToFocus() {
   const f = document.querySelector('.card.focus');

@@ -1,4 +1,5 @@
 manifest.js
+install.js
 *.vsix
 .vscode/**
 .git/**

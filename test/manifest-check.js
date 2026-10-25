@@ -36,9 +36,26 @@ for (const cmd of commands) {
   if (!ok) problems.push(`처리 함수 없음: ${cmd}`);
 }
 
-console.log(`\n메뉴 구조: 명령 ${commands.size}, 하위 메뉴 ${submenus.size}`);
+// 코드에서 쓰는 메시지 키(t('...'))가 한국어·영어 표에 모두 있는가
+const i18nSrc = fs.readFileSync(path.join(root, 'src', 'i18n.js'), 'utf8');
+const koBlock = i18nSrc.slice(i18nSrc.indexOf('  ko: {'), i18nSrc.indexOf('  en: {'));
+const enBlock = i18nSrc.slice(i18nSrc.indexOf('  en: {'));
+const defined = (block) => new Set([...block.matchAll(/^    (\w+): /gm)].map((m) => m[1]));
+const koKeys = defined(koBlock);
+const enKeys = defined(enBlock);
+const used = new Set();
+for (const f of fs.readdirSync(path.join(root, 'src'))) {
+  const text = fs.readFileSync(path.join(root, 'src', f), 'utf8');
+  for (const m of text.matchAll(/\bt\('(\w+)'/g)) used.add(m[1]);
+}
+for (const k of used) {
+  if (!koKeys.has(k)) problems.push(`한국어 문구 없음: ${k}`);
+  if (!enKeys.has(k)) problems.push(`영어 문구 없음: ${k}`);
+}
+
+console.log(`\n메뉴 구조: 명령 ${commands.size}, 하위 메뉴 ${submenus.size}, 메시지 키 ${used.size}`);
 if (problems.length) {
   console.log(problems.map((p) => `FAIL ${p}`).join('\n'));
   process.exit(1);
 }
-console.log('OK   메뉴 구조 일관성');
+console.log('OK   메뉴 구조·메시지 키 일관성');

@@ -49,11 +49,12 @@ async function setProp(prop, dir, patterns) {
 }
 
 // 반환: true면 추가함, false면 이미 있음
-async function addToProp(prop, dir, pattern) {
+// 반환: 새로 들어간 패턴 수(이미 있던 것은 건너뛴다)
+async function addToProp(prop, dir, patterns) {
   const list = await getProp(prop, dir);
-  if (list.includes(pattern)) return false;
-  await setProp(prop, dir, [...list, pattern]);
-  return true;
+  const fresh = [...new Set(patterns)].filter((x) => !list.includes(x));
+  if (fresh.length) await setProp(prop, dir, [...list, ...fresh]);
+  return fresh.length;
 }
 
 // 폴더 아래에서 속성이 걸린 곳을 모두 찾는다. 반환: [{ dir, patterns }]
@@ -140,7 +141,7 @@ async function removeRule(rule) {
   await setProp(rule.kind, rule.dir, fresh.filter((p) => p !== rule.pattern));
 }
 
-// ---- 클라이언트 설정 (내 PC 전체 global-ignores) ----
+// ---- 클라이언트 설정 (내 PC 전역 global-ignores) ----
 //
 // svn은 아래 순서로 찾아 **처음 값이 있는 곳 하나만** 쓴다(윈도우).
 //   1. 내 설정 파일      %APPDATA%\Subversion\config
@@ -224,7 +225,7 @@ function findGlobalIgnores(lines) {
   return undefined;
 }
 
-// 지금 실제로 쓰이는 내 PC 전체 목록과 그 출처.
+// 지금 실제로 쓰이는 내 PC 전역 목록과 그 출처.
 // source: 'userFile' | 'userRegistry' | 'systemFile' | 'systemRegistry' | 'default'
 // set: 내 설정 파일에 값이 있는지
 function readLocal() {
@@ -247,7 +248,7 @@ function localWriteTarget() {
   return readLocal().source === 'userFile' ? 'userFile' : 'userRegistry';
 }
 
-// 내 PC 전체 목록을 쓴다. 쓴 곳('userFile' | 'userRegistry')을 돌려준다.
+// 내 PC 전역 목록을 쓴다. 쓴 곳('userFile' | 'userRegistry')을 돌려준다.
 function writeLocal(patterns) {
   const target = localWriteTarget();
   if (target === 'userRegistry') {
@@ -287,11 +288,11 @@ function writeConfigFile(patterns) {
   fs.writeFileSync(file, lines.join(eol), 'utf8');
 }
 
-function addToLocal(pattern) {
+function addToLocal(add) {
   const { patterns } = readLocal();
-  if (patterns.includes(pattern)) return false;
-  writeLocal([...patterns, pattern]);
-  return true;
+  const fresh = [...new Set(add)].filter((x) => !patterns.includes(x));
+  if (fresh.length) writeLocal([...patterns, ...fresh]);
+  return fresh.length;
 }
 
 module.exports = {
