@@ -13,10 +13,11 @@ const LOCK_RETRY_MS = 250;
 const MAX_COMMAND_LINE = 30000;
 
 class SvnError extends Error {
-  constructor(message, stderr, code) {
+  constructor(message, stderr, code, stdout) {
     super(message);
     this.stderr = stderr || '';
     this.code = code;
+    this.stdout = stdout || '';  // 여러 대상 중 일부만 실패해도 나머지 결과는 stdout에 나온다(svn info 등)
   }
 }
 
@@ -64,10 +65,12 @@ function realPath(p) {
   }
 }
 
+// PATH에 svn이 없어서 TortoiseSVN의 svn.exe로 넘어갔으면 기억해 둔다(매번 실패하는 실행을 거치지 않게).
+let fallbackFound = false;
 function svnPath() {
   const configured = vscode.workspace.getConfiguration('svnTools').get('svnPath', '');
   if (configured) return configured;
-  return 'svn';
+  return fallbackFound ? FALLBACK_SVN : 'svn';
 }
 
 function run(file, args, cwd) {
@@ -78,7 +81,7 @@ function run(file, args, cwd) {
         const errText = decode(stderr).trim();
         if (err) {
           if (err.code === 'ENOENT') return reject(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }));
-          return reject(new SvnError(errText || err.message, errText, err.code));
+          return reject(new SvnError(errText || err.message, errText, err.code, out));
         }
         resolve({ stdout: out, stderr: errText });
       });
@@ -106,6 +109,7 @@ async function exec(args, cwd) {
     } catch (e) {
       if (e.code === 'ENOENT' && file === 'svn' && fs.existsSync(FALLBACK_SVN)) {
         file = FALLBACK_SVN;
+        fallbackFound = true;
         attempt--;
         continue;
       }
@@ -157,10 +161,17 @@ function parseStatus(xml) {
       movedFrom: wc && attr(wc[0], 'moved-from') ? path.normalize(attr(wc[0], 'moved-from')) : undefined,
       movedTo: wc && attr(wc[0], 'moved-to') ? path.normalize(attr(wc[0], 'moved-to')) : undefined,
       locked: wc ? attr(wc[0], 'wc-locked') === 'true' : false,
+      // 이 작업 사본이 가진 svn lock 토큰(K). 수정하지 않은 파일도 status에 나온다.
+      lockToken: /<wc-status\b[\s\S]*?<lock>[\s\S]*?<\/wc-status>/.test(body),
       reposItem: repos ? attr(repos[0], 'item') : undefined,
     });
   }
   return out;
+}
+
+// svn info --xml 대상 여러 개: 관리 중인 대상의 경로 목록(관리 대상이 아닌 것은 경고만 나오고 빠진다)
+function parseInfoPaths(xml) {
+  return [...xml.matchAll(/<entry\b[^>]*\spath="([^"]*)"/g)].map((m) => path.normalize(unescapeXml(m[1])));
 }
 
 function parseInfo(xml) {
@@ -239,5 +250,5 @@ function lastRevision(text) {
 }
 
 module.exports = {
-  exec, realPath, decode, parseStatus, parseInfo, parseLog, parsePropget, parseInheritedProps, lastRevision, SvnError,
+  exec, realPath, decode, parseStatus, parseInfo, parseInfoPaths, parseLog, parsePropget, parseInheritedProps, lastRevision, SvnError,
 };

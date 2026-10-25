@@ -1,13 +1,14 @@
 'use strict';
 // 명령 처리. 탐색기 우클릭·Source Control 패널·명령 팔레트가 모두 여기로 들어온다.
 const vscode = require('vscode');
+const { AsyncLocalStorage } = require('async_hooks');
 const fs = require('fs');
 const path = require('path');
 const svn = require('./svn');
 const ignore = require('./ignore');
 const tortoise = require('./tortoise');
 const { t } = require('./i18n');
-const { baseUri, isInside, key, isPlainAdd } = require('./repository');
+const { baseUri, isInside, key, isPlainAdd, hitAncestor } = require('./repository');
 const { IgnoreView } = require('./ignoreView');
 const { ReasonView } = require('./reasonView');
 const { CommitView } = require('./commitView');
@@ -40,16 +41,25 @@ function createCommands(ctx) {
     return toUris(args).map((u) => svn.realPath(u.fsPath));
   }
 
+  // 명령이 다룬 저장소. 명령이 끝나면 이 저장소만 새로고침한다(작업 폴더가 여럿이어도 전부 돌리지 않게). 하나도 없으면 전부.
+  // 명령마다 따로 모은다(AsyncLocalStorage) — 커밋 확인 탭처럼 오래 떠 있는 명령이 다른 명령의 새로고침을 미루지 않게.
+  const scope = new AsyncLocalStorage();
+  const use = (repo) => {
+    const used = scope.getStore();
+    if (repo && used) used.add(repo);
+    return repo;
+  };
+
   function repoFor(p) {
     const repo = ctx.repositories().find((r) => r.contains(p));
     if (!repo) vscode.window.showWarningMessage(t('notWorkingCopy', p));
-    return repo;
+    return use(repo);
   }
 
   function repoOfArgs(args, list) {
     if (args[0] && args[0].rootUri) {
       const r = ctx.repositories().find((x) => x.sourceControl === args[0]);
-      if (r) return r;
+      if (r) return use(r);
     }
     if (list.length === 0) {
       const repos = ctx.repositories();
@@ -64,9 +74,10 @@ function createCommands(ctx) {
     if (repo) return repo;
     const repos = ctx.repositories();
     if (repos.length === 0) return undefined;
+    if (repos.length === 1) return use(repos[0]);
     const pick = await vscode.window.showQuickPick(repos.map((r) => ({ label: r.name, description: r.folder, repo: r })),
       { title: t('pickRepoTitle') });
-    return pick && pick.repo;
+    return use(pick && pick.repo);
   }
 
   function showError(e) {
@@ -91,15 +102,18 @@ function createCommands(ctx) {
 
   // 오류를 잡아 알리고, 끝나면 상태를 새로고침한다.
   function command(fn) {
-    return async (...args) => {
+    return (...args) => scope.run(new Set(), async () => {
+      const used = scope.getStore();
       try {
         await fn(...args);
       } catch (e) {
         showError(e);
       } finally {
-        ctx.refreshAll();
+        const repos = [...used].filter((r) => ctx.repositories().includes(r));
+        if (repos.length) repos.forEach((r) => r.refresh());
+        else ctx.refreshAll();
       }
-    };
+    });
   }
 
   // "다시 묻지 않음"을 누른 뒤 어디서 다시 켜는지 알린다.
@@ -183,9 +197,10 @@ function createCommands(ctx) {
       vscode.window.showWarningMessage(t('commitEmptyMessage'));
       return false;
     }
-    await repo.refresh();
+    // 상태는 부르는 쪽(review)이 방금 다시 읽었다.
+    const targetKeys = new Set(targets.map(key));
     const inScope = [...repo.statuses.values()]
-      .filter((s) => (exact ? targets.some((p) => key(p) === key(s.path)) : targets.some((p) => isInside(s.path, p))));
+      .filter((s) => (exact ? targetKeys.has(key(s.path)) : targets.some((p) => isInside(s.path, p))));
     const committable = inScope.filter((s) => s.code !== '?');
     // Update가 중간에 끊긴 폴더가 있으면 커밋하지 않는다(받지 못한 파일이 누락으로 보여 삭제가 커밋될 수 있다).
     const incomplete = committable.filter((s) => s.code === 'N');
@@ -246,40 +261,75 @@ function createCommands(ctx) {
     return true;
   }
 
-  // 스테이징된 것만 커밋. 스테이징 뒤 새로 생긴 상위 폴더 문제는 여기서 한 번 더 확인한다.
   // 커밋 직전 확인. 설정(svnTools.commit.review)이 켜져 있으면 커밋 확인 탭, 꺼져 있으면 메시지 입력과 "함께 올라갈 항목" 확인 창.
-  //   picked: 올리려고 고른 항목, extras: 함께 올라가야 하는 항목(새 상위 폴더, 이동의 반대쪽 — 탭에서 끌 수 없다)
+  //   plan(): 지금 상태로 { picked(올리려고 고른 항목), extras(함께 올라가야 하는 항목 — 탭에서 끌 수 없다) }를 만든다.
+  //   탭의 [커밋]을 누르면 상태를 다시 읽고 plan()을 다시 만들어 검증한다(탭을 연 사이 밖에서 바뀐 것을 커밋하지 않게).
   //   반환: { message, paths, all(고른 것을 하나도 빼지 않았는지) } 또는 취소면 undefined
-  async function review(repo, message, picked, extras) {
+  async function review(repo, message, plan) {
+    let current = plan();
     if (vscode.workspace.getConfiguration('svnTools').get('commit.review', true)) {
-      const entry = (p, locked) => ({ path: p, code: repo.statusOf(p) || '', locked });
-      const items = [...picked.map((p) => entry(p, false)), ...extras.map((p) => entry(p, true))];
-      const res = await CommitView.open(repo, message, items);
+      const itemsOf = ({ picked, extras }) => [
+        ...picked.map((p) => ({ path: p, code: repo.statusOf(p) || '', locked: false, pair: repo.movePair(p) })),
+        ...extras.map((p) => ({ path: p, code: repo.statusOf(p) || '', locked: true })),
+      ];
+      const sameList = (a, b) => a.length === b.length && a.every((x, i) => key(x) === key(b[i]));
+      let all = true;
+      const validate = async (checked) => {
+        await repo.refresh();
+        const fresh = plan();
+        if (!sameList(fresh.picked, current.picked) || !sameList(fresh.extras, current.extras)) {
+          current = fresh;
+          if (fresh.picked.length === 0) return { error: t('reviewNothingNow'), items: [] };
+          return { error: t('reviewChanged'), items: itemsOf(fresh) };
+        }
+        const on = new Set(checked.map(key));
+        const pickedOn = current.picked.filter((p) => on.has(key(p)));
+        if (pickedOn.length === 0) return { error: t('reviewNoItems') };
+        all = pickedOn.length === current.picked.length;
+        if (all) return { paths: [...current.picked, ...current.extras] };
+        // 끈 항목이 남은 항목과 함께 올라가야 하는 것(이동의 반대쪽, 새 상위 폴더)이면 뺄 수 없다 — 조용히 넣지 않고 알린다.
+        // 잠긴 항목은 남은 것 기준으로 다시 모은다(필요 없어진 새 상위 폴더가 혼자 올라가지 않게).
+        const paths = closure(repo, pickedOn, true);
+        const off = new Set(current.picked.filter((p) => !on.has(key(p))).map(key));
+        const revived = paths.filter((p) => off.has(key(p)));
+        if (revived.length) return { error: t('reviewRevived', revived.map((p) => path.relative(repo.folder, p) || p).join(', ')) };
+        return { paths };
+      };
+      const res = await CommitView.open(repo, message, itemsOf(current), validate);
       if (!res) return undefined;
-      const all = res.paths.length === items.length;
-      // 체크를 끈 항목이 있으면 함께 올라가야 할 항목을 남은 것 기준으로 다시 모은다.
-      return { message: res.message, paths: all ? items.map((x) => x.path) : closure(repo, res.paths, true), all };
+      return { message: res.message, paths: res.paths, all };
     }
     if (!message.trim()) message = await askMessage(repo);
     if (message === undefined) return undefined;
-    if (extras.length) {
-      const detail = extras.map((p) => path.relative(repo.folder, p) || p).join('\n');
-      if (!(await confirm(t('commitParentsAsk', extras.length), t('commitParentsYes'), detail))) return undefined;
+    await repo.refresh();
+    current = plan();
+    if (current.picked.length === 0) {
+      vscode.window.showInformationMessage(t('commitNothing'));
+      return undefined;
     }
-    return { message, paths: [...picked, ...extras], all: true };
+    if (current.extras.length) {
+      const detail = current.extras.map((p) => path.relative(repo.folder, p) || p).join('\n');
+      if (!(await confirm(t('commitParentsAsk', current.extras.length), t('commitParentsYes'), detail))) return undefined;
+    }
+    return { message, paths: [...current.picked, ...current.extras], all: true };
   }
 
+  // 스테이징된 것만 커밋한다.
   async function commitStaged(repo, message) {
-    await repo.refresh();
-    const list = repo.stagedPaths();
-    const full = closure(repo, list, true);
-    const r = await review(repo, message, list, full.slice(list.length));
+    const plan = () => {
+      const picked = repo.stagedPaths();
+      return { picked, extras: closure(repo, picked, true).slice(picked.length) };
+    };
+    const r = await review(repo, message, plan);
     if (!r) return;
     repo.stage(r.paths.filter((p) => repo.contains(p) && !repo.isStaged(p)));
     // 올릴 것이 연 폴더 안의 변경 전부면 작업 폴더 하나를 기본 깊이로 넘긴다(항목이 많아도 명령줄이 길어지지 않는다).
+    // 판단은 review가 방금 다시 읽은 상태로 한다. 잠근(svn lock) 파일이 있으면 폴더 커밋이 수정하지 않은 파일의 잠금까지
+    // 풀어서(검토로 재현) 항목별로 넘긴다.
     const chosen = new Set(r.paths.map(key));
     const covers = r.paths.every((p) => repo.contains(p))
-      && [...repo.statuses.values()].every((s) => s.code === '?' || chosen.has(key(s.path)));
+      && [...repo.statuses.values()].every((s) => s.code === '?' || chosen.has(key(s.path)))
+      && !repo.hasLocks();
     await commitPaths(repo, covers ? [repo.folder] : r.paths, r.message, !covers, r.paths);
   }
 
@@ -291,7 +341,9 @@ function createCommands(ctx) {
     if (!repo) return;
     if (list.length === 0) list = [repo.folder];
     await repo.refresh();
-    const hasChange = [...repo.statuses.values()].some((s) => list.some((p) => isInside(s.path, p)));
+    // 미등록 항목은 고른 것 자체가 미등록일 때만 뜻이 있다(관리 폴더 안의 미등록 파일만으로는 커밋할 것이 없다).
+    const listKeys = new Set(list.map(key));
+    const hasChange = [...repo.statuses.values()].some((s) => s.code !== '?' && hitAncestor(s.path, listKeys, ''));
     if (!hasChange && !list.some((p) => repo.isUnversioned(p) || repo.statusOf(p) === 'I')) {
       return vscode.window.showInformationMessage(t('commitNothing'));
     }
@@ -317,14 +369,19 @@ function createCommands(ctx) {
 
     // 고른 것(폴더면 그 안의 변경까지)과 함께 올라가야 할 항목(새 상위 폴더, 이동의 반대쪽)이 고른 범위 밖에 있으면 함께 넣는다.
     // 그대로면 고른 경로를 기본 깊이로 넘기고, 범위 밖 항목이 끼거나 탭에서 뺀 항목이 있으면 경로를 모두 풀어 --depth empty로 넘긴다.
-    const inner = new Map(list.map((p) => [key(p), p]));
-    for (const p of list) if (isDir(p)) for (const c of changedInside(repo, p)) inner.set(key(c), c);
-    const full = closure(repo, [...inner.values()], true);
-    const extras = full.filter((p) => !list.some((l) => isInside(p, l)));
-    const shown = [...inner.values()].filter((p) => !['?', 'I', undefined].includes(repo.statusOf(p)));
-    const r = await review(repo, repo.sourceControl.inputBox.value, shown, extras);
+    let extrasNow = [];
+    const plan = () => {
+      const inner = new Map(list.map((p) => [key(p), p]));
+      for (const p of list) if (isDir(p)) for (const c of changedInside(repo, p)) inner.set(key(c), c);
+      const full = closure(repo, [...inner.values()], true);
+      extrasNow = full.filter((p) => !list.some((l) => isInside(p, l)));
+      const picked = [...inner.values()].filter((p) => !['?', 'I', undefined].includes(repo.statusOf(p)));
+      return { picked, extras: extrasNow };
+    };
+    const r = await review(repo, repo.sourceControl.inputBox.value, plan);
     if (!r) return;
-    if (r.all && extras.length === 0) await commitPaths(repo, list, r.message, false);
+    // 잠근 파일이 있으면 폴더째 넘기지 않는다 — 폴더 커밋은 그 아래 수정하지 않은 파일의 잠금까지 푼다.
+    if (r.all && extrasNow.length === 0 && !repo.hasLocks()) await commitPaths(repo, list, r.message, false);
     else await commitPaths(repo, r.paths, r.message, true);
   }
 
@@ -643,6 +700,8 @@ function createCommands(ctx) {
   // 파일은 이미 새 이름에 있다. 원래 이름으로 되돌린 뒤 svn move 한다(TortoiseSVN의 Repair Move와 같은 방식).
   // svn move가 실패하면 사용자의 이름 바꾸기가 사라지지 않게 다시 새 이름으로 돌려놓는다.
   async function applyRename(repo, { from, to }) {
+    // 오래 떠 있던 알림을 늦게 눌렀을 수 있다 — 아직 "옛 이름 누락 + 새 이름 미등록"인지 다시 본다(호출하는 쪽이 새로고침한 뒤).
+    if (!repo.renameOf(to)) throw new Error(t('renameRepairStale', path.basename(to)));
     if (fs.existsSync(from)) throw new Error(t('renameRepairExists', path.basename(from)));
     if (!fs.existsSync(to)) throw new Error(t('renameRepairGone', path.basename(to)));
     if (vscode.workspace.textDocuments.some((d) => d.isDirty && d.uri.scheme === 'file' && isInside(repo.toReal(d.uri.fsPath), to))) {
@@ -662,6 +721,7 @@ function createCommands(ctx) {
   // 의도하지 않은 이름 바꾸기를 되돌린다. 편집기 탭도 따라오도록 VS Code의 이름 바꾸기(WorkspaceEdit)로 한다.
   // 이때 다시 이름 바꾸기 이벤트가 오지만, 새 이름 쪽은 svn이 모르는 경로라 onRenamed가 건너뛴다.
   async function undoRename(repo, { from, to }) {
+    if (!repo.renameOf(to)) throw new Error(t('renameRepairStale', path.basename(to)));
     if (fs.existsSync(from)) throw new Error(t('renameRepairExists', path.basename(from)));
     const edit = new vscode.WorkspaceEdit();
     edit.renameFile(vscode.Uri.file(repo.toUi(to)), vscode.Uri.file(repo.toUi(from)));
@@ -669,17 +729,26 @@ function createCommands(ctx) {
     repo.forgetRename(to);
   }
 
-  async function isVersioned(repo, p) {
-    try {
-      await svn.exec(['info', '--xml', p], repo.folder);
-      return true;
-    } catch {
-      return false;
+  // 경로들 중 관리 중인 것(key Set). svn info는 관리 대상이 아닌 것이 섞이면 경고 후 실패로 끝나지만, 나머지 결과는 stdout에 나온다.
+  // 수백 개면 명령줄 길이 제한(함정 12)에 걸리지 않게 100개씩 나눠 묻는다.
+  async function versionedOf(repo, list) {
+    const found = new Set();
+    for (let i = 0; i < list.length; i += 100) {
+      let out;
+      try {
+        out = (await svn.exec(['info', '--xml', ...list.slice(i, i + 100)], repo.folder)).stdout;
+      } catch (e) {
+        if (e.code === 'ENOENT') return found;
+        out = e.stdout || '';
+      }
+      for (const p of svn.parseInfoPaths(out)) found.add(key(p));
     }
+    return found;
   }
 
   async function onRenamed(e) {
     const found = [];
+    const candidates = [];
     for (const f of e.files) {
       if (f.oldUri.scheme !== 'file' || f.newUri.scheme !== 'file') continue;
       const to = svn.realPath(f.newUri.fsPath);
@@ -697,12 +766,24 @@ function createCommands(ctx) {
         found.push({ repo, from: prev.from, to });
         continue;
       }
-      if (!(await isVersioned(repo, from))) continue;
-      repo.recordRename(from, to);
-      found.push({ repo, from, to });
+      // 이미 아는 상태로 먼저 거른다. 변경 목록에 있으면 관리 중, 미등록·무시 폴더 안이면 관리 대상이 아니다.
+      // 나머지(변경 없는 관리 파일)는 아래에서 svn info 한 번으로 모아 확인한다(리팩터로 수십 개를 바꿔도 하나씩 부르지 않게).
+      const known = repo.entry(from);
+      if (known ? known.code === '?' : (repo.isUnversioned(from) || repo.isIgnored(from))) continue;
+      candidates.push({ repo, from, to, known: !!known });
+    }
+    for (const repo of new Set(candidates.map((c) => c.repo))) {
+      const mine = candidates.filter((c) => c.repo === repo);
+      const versioned = await versionedOf(repo, mine.filter((c) => !c.known).map((c) => c.from));
+      for (const c of mine) {
+        if (!c.known && !versioned.has(key(c.from))) continue;
+        repo.recordRename(c.from, c.to);
+        found.push(c);
+      }
     }
     if (found.length === 0) return;
-    ctx.refreshAll();
+    const touched = [...new Set(found.map((x) => x.repo))];
+    touched.forEach((r) => r.refresh());
     const config = vscode.workspace.getConfiguration('svnTools');
     if (!config.get('rename.askOnRename', true)) return;
     // 작업을 막지 않는 알림으로 묻는다(여러 파일을 한꺼번에 바꾸는 리팩터 중에도 끊기지 않게). 닫으면 "이번엔 안 함"이고,
@@ -720,12 +801,13 @@ function createCommands(ctx) {
     }
     if (pick !== apply && pick !== undo) return;
     try {
+      for (const r of new Set(found.map((x) => x.repo))) await r.refresh();
       for (const r of found) await (pick === apply ? applyRename(r.repo, r) : undoRename(r.repo, r));
       vscode.window.showInformationMessage(pick === apply ? t('renameRepairDone') : t('renameUndoDone'));
     } catch (err) {
       showError(err);
     } finally {
-      ctx.refreshAll();
+      touched.forEach((r) => r.refresh());
     }
   }
 
@@ -751,7 +833,7 @@ function createCommands(ctx) {
       vscode.window.showInformationMessage(pick === apply ? t('renameRepairDone') : t('renameUndoDone'));
     }),
 
-    refresh: command(async () => {}),
+    refresh: command(async () => ctx.rescanAll()),
 
     // 패널 ✓ / Ctrl+Enter. 스테이징된 것만 커밋한다. 스테이징이 비었으면 git처럼 "모두 스테이징하고 커밋할지" 묻는다
     // (svnTools.commit.smartCommit: ask / always / never).
@@ -851,8 +933,13 @@ function createCommands(ctx) {
       const targets = closure(repo, list, false);
       const deep = targets.filter((p) => ['A', 'R', 'D'].includes(repo.statusOf(p)) && (isDir(p) || repo.statusOf(p) === 'D'));
       const shallow = targets.filter((p) => !deep.includes(p));
-      const hit = repo.stagedPaths().filter((s) => deep.some((d) => isInside(s, d)) && !targets.some((x) => key(x) === key(s)));
-      const detail = hit.length ? t('revertAllStagedNote', hit.length) : undefined;
+      const listed = new Set(list.map(key));
+      const targetKeys = new Set(targets.map(key));
+      const hit = repo.stagedPaths().filter((s) => deep.some((d) => isInside(s, d)) && !targetKeys.has(key(s)));
+      // 이동 짝으로 함께 되돌리는 항목 중 스테이징된 것(다른 그룹에 있어 이 목록에는 안 보인다)
+      const pairedStaged = targets.filter((p) => !listed.has(key(p)) && repo.isStaged(p));
+      const notes = [hit.length && t('revertAllStagedNote', hit.length), pairedStaged.length && t('revertAllPairStaged', pairedStaged.length)];
+      const detail = notes.filter(Boolean).join('\n') || undefined;
       if (!(await confirm(t('revertAllAsk', list.length), t('revertYes'), detail))) return;
       if (deep.length) await step('revert', () => svn.exec(['revert', '--depth', 'infinity', ...deep], repo.folder));
       if (shallow.length) await step('revert', () => svn.exec(['revert', '--depth', 'empty', ...shallow], repo.folder));
@@ -925,7 +1012,13 @@ function createCommands(ctx) {
       if (list.length === 0) return vscode.window.showWarningMessage(t('noSelection'));
       const repo = repoFor(list[0]);
       if (!repo) return;
-      const items = list.filter((p) => repo.contains(p));
+      await repo.refresh();
+      // 이미 관리 중인 항목은 svn이 무시 규칙을 적용하지 않는다 — 빼고 알린다.
+      const inRepo = list.filter((p) => repo.contains(p));
+      const versioned = inRepo.filter((p) => !repo.isUnversioned(p) && repo.statusOf(p) !== 'I');
+      if (versioned.length) vscode.window.showInformationMessage(t('ignoreVersionedSkipped', versioned.map((p) => path.basename(p)).join(', ')));
+      const items = inRepo.filter((p) => !versioned.includes(p));
+      if (items.length === 0) return;
       // 공백: svn:ignore는 한 줄에 패턴 하나라 이름 그대로 쓴다. global-ignores(폴더 속성·내 PC 전역)는 공백으로 패턴을 나눠서
       // 공백을 ?(아무 한 글자)로 바꿔 같은 이름에 맞게 한다. 그래서 패턴은 적용 범위를 고른 뒤에 정한다.
       const names = items.map((p) => path.basename(p));
@@ -990,13 +1083,16 @@ function createCommands(ctx) {
       const targets = kind.root
         ? [{ dir: repo.folder, patterns: all }]
         : parents.map((x) => ({ dir: x.dir, patterns: x.index.map(patternOf) }));
-      const unversioned = targets.filter((x) => ['?', 'I'].includes(repo.statusOf(x.dir)) || repo.isUnversioned(x.dir));
+      // 상위 폴더가 미등록이면 속성을 걸 수 없다 — 그 폴더만 빼고 나머지에는 적용한다.
+      const unversioned = targets.filter((x) => repo.statusOf(x.dir) === 'I' || repo.isUnversioned(x.dir));
       if (unversioned.length) {
-        return vscode.window.showWarningMessage(t('ignoreUnversionedParent', unversioned.map((x) => x.dir).join(', ')));
+        vscode.window.showWarningMessage(t('ignoreUnversionedParent', unversioned.map((x) => path.relative(repo.folder, x.dir) || x.dir).join(', ')));
       }
+      const usable = targets.filter((x) => !unversioned.includes(x));
+      if (usable.length === 0) return;
       let added = 0;
-      for (const x of targets) added += await ignore.addToProp(kind.prop, x.dir, x.patterns);
-      const where = targets.map((x) => path.basename(x.dir)).join(', ');
+      for (const x of usable) added += await ignore.addToProp(kind.prop, x.dir, x.patterns);
+      const where = usable.map((x) => path.basename(x.dir)).join(', ');
       vscode.window.showInformationMessage(added ? t('ignoreDoneProp', `${kind.prop} (${where})`, all.join(', ')) : t('ignoreAlready', all.join(', ')));
     }),
 

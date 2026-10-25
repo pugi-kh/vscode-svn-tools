@@ -429,7 +429,7 @@ function render() {
 
   // ---- 다른 폴더에 규칙 추가 ----
   // 폴더는 작업 폴더 기준 경로다. 직접 쓰거나(목록에서 자동완성), [폴더 선택…]으로 고른다. 비우면 작업 폴더.
-  const dirInput = el('input', { value: newDir, list: 'dirs', placeholder: L.viewFolderPlaceholder, class: 'grow' });
+  const dirInput = el('input', { id: 'newDir', value: newDir, list: 'dirs', placeholder: L.viewFolderPlaceholder, class: 'grow' });
   dirInput.addEventListener('input', () => { newDir = dirInput.value; });
   const kind = el('select', {}, el('option', { value: 'svn:ignore' }, 'svn:ignore'), el('option', { value: 'svn:global-ignores' }, 'svn:global-ignores'));
   const create = () => {
@@ -465,7 +465,12 @@ window.addEventListener('message', (ev) => {
   const m = ev.data;
   if (m.type === 'state') { loadState(m.state); render(); scrollToFocus(); }
   if (m.type === 'focus') { focus = m.focus; render(); scrollToFocus(); }
-  if (m.type === 'picked') { newDir = m.rel === '.' ? '' : m.rel; render(); }
+  // 화면 전체를 다시 그리지 않고 폴더 칸만 채운다(고르던 종류, 입력 중이던 패턴이 그대로 남게).
+  if (m.type === 'picked') {
+    newDir = m.rel === '.' ? '' : m.rel;
+    const input = document.getElementById('newDir');
+    if (input) { input.value = newDir; input.focus(); }
+  }
 });
 function scrollToFocus() {
   const f = document.querySelector('.card.focus');

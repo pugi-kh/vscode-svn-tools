@@ -22,13 +22,18 @@ const STYLE = {
 class DecorationProvider {
   constructor(getRepositories) {
     this.getRepositories = getRepositories;
+    this.reloadConfig();
     this.emitter = new vscode.EventEmitter();
     this.onDidChangeFileDecorations = this.emitter.event;
   }
 
+  // 설정은 바뀔 때만 읽는다(extension.js의 설정 변경 처리). 표시는 보이는 파일마다 불려서 매번 읽으면 비싸다.
+  reloadConfig() {
+    this.enabled = vscode.workspace.getConfiguration('svnTools').get('decorations.enabled', true);
+  }
+
   provideFileDecoration(uri) {
-    if (uri.scheme !== 'file') return undefined;
-    if (!vscode.workspace.getConfiguration('svnTools').get('decorations.enabled', true)) return undefined;
+    if (uri.scheme !== 'file' || !this.enabled) return undefined;
     const repo = this.getRepositories().find((r) => r.contains(uri.fsPath));
     if (!repo) return undefined;
     const code = repo.statusOf(uri.fsPath);

@@ -227,6 +227,28 @@ function createRepo() {
     const b = (await stOf(mv)).find((e) => e.path === mvB);
     return `${b.item}:${b.movedFrom === mvA}:${fs.readFileSync(mvB, 'utf8')}`;
   }, 'added:true:a 수정');
+  // 이름 바꾸기 감지는 관리 중인지 svn info 한 번으로 모아 묻는다(commands.js versionedOf). 관리 대상이 아닌 것이 섞이면
+  // 실패로 끝나도 나머지 결과는 stdout에 나와야 한다.
+  await check('svn info 여러 대상(관리 아님 섞임)', async () => {
+    const stray = path.join(mv, '관리 안 함.txt');
+    fs.writeFileSync(stray, 's');
+    let out;
+    try {
+      out = (await svn.exec(['info', '--xml', keep, stray, mvA], wc)).stdout;
+    } catch (e) {
+      out = e.stdout;
+    }
+    fs.rmSync(stray);
+    return svn.parseInfoPaths(out).map((p) => path.basename(p)).sort().join(',');
+  }, ['남길 파일.txt', '원래 이름.txt'].sort().join(','));
+  // svn lock: 수정하지 않은 파일도 status에 잠금 토큰이 나온다(repository.hasLocks). 있으면 폴더 하나로 커밋하지 않는다 —
+  // 폴더 커밋은 그 아래 모든 잠금을 풀어 버린다.
+  await check('잠근 파일은 수정하지 않아도 status에 잠금 표시', async () => {
+    await svn.exec(['lock', '-m', '잠금', keep], wc);
+    const e = (await stOf(mv)).find((x) => x.path === keep);
+    await svn.exec(['unlock', keep], wc);
+    return `${e && e.item}:${e && e.lockToken}`;
+  }, 'normal:true');
   // 일반 add 폴더는 자식 add 없이 혼자 되돌릴 수 없다(E155038) — 스테이징 취소·Revert All이 폴더는 infinity로 되돌리는 이유.
   await check('A 폴더 revert --depth empty는 거부', async () => {
     const nd = path.join(mv, '새 폴더');

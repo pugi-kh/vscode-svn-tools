@@ -9,6 +9,12 @@ const MESSAGES = {
     commitInputPrompt: '커밋 메시지를 입력하세요',
     commitEmptyMessage: '커밋 메시지가 비어 있습니다.',
     commitNothing: '커밋할 변경이 없습니다.',
+    revertAllPairStaged: "이동의 반대쪽으로 함께 되돌리는 항목 중 {0}개는 스테이징된 변경 그룹에 있습니다.",
+    ignoreVersionedSkipped: "이미 SVN에서 관리 중인 항목은 무시 규칙이 적용되지 않아 뺐습니다: {0}",
+    renameRepairStale: "{0}의 이름 바꾸기는 이미 적용됐거나 상태가 바뀌어 더 이상 적용·되돌릴 수 없습니다.",
+    reviewRevived: "체크를 끈 {0}은(는) 남은 항목과 함께 올라가야 해서 뺄 수 없습니다(이동의 반대쪽이거나 새 상위 폴더). 그 항목을 다시 켜거나, 함께 올라가는 항목도 끄세요.",
+    reviewNothingNow: "탭을 연 뒤 상태가 바뀌어 지금은 커밋할 항목이 없습니다.",
+    reviewChanged: "탭을 연 뒤 스테이징이나 작업 사본이 바뀌어 목록을 새로 고쳤습니다. 다시 확인한 뒤 커밋하세요.",
     viewFolderPlaceholder: "작업 폴더 기준 경로 (예: src\\sub). 비우면 작업 폴더",
     viewFolderPick: "폴더 선택…",
     openSetting: "설정 열기",
@@ -130,7 +136,7 @@ const MESSAGES = {
     ignoreAlready: '이미 들어 있는 패턴입니다: {0}',
     ignoreDoneProp: '{0}에 {1} 패턴을 추가했습니다. 폴더 속성 변경을 커밋해야 공유됩니다.',
     ignoreDoneLocal: '내 PC 전역 무시 목록에 {0}을(를) 추가했습니다.',
-    ignoreUnversionedParent: '상위 폴더가 SVN에 등록돼 있지 않아 속성을 걸 수 없습니다: {0}',
+    ignoreUnversionedParent: "상위 폴더가 SVN에 등록돼 있지 않아 속성을 걸 수 없는 곳은 뺐습니다: {0}",
     logTitle: '{0} 로그',
     logEmpty: '로그가 없습니다.',
     logActionTitle: 'r{0} — 무엇을 할까요?',
@@ -244,6 +250,12 @@ const MESSAGES = {
     commitInputPrompt: 'Enter a commit message',
     commitEmptyMessage: 'The commit message is empty.',
     commitNothing: 'There are no changes to commit.',
+    revertAllPairStaged: "{0} of the items reverted with the other side of a move are in the Staged Changes group.",
+    ignoreVersionedSkipped: "Ignore rules do not apply to items already under SVN, so these were left out: {0}",
+    renameRepairStale: "The rename of {0} was already applied or its status changed, so it can no longer be applied or undone.",
+    reviewRevived: "{0} cannot be left out because it must be committed with the remaining items (the other side of a move or a new parent folder). Check it again, or also uncheck the items that need it.",
+    reviewNothingNow: "The status changed after this tab was opened, and there is nothing to commit now.",
+    reviewChanged: "Staging or the working copy changed after this tab was opened, so the list was refreshed. Check it again, then commit.",
     viewFolderPlaceholder: "Path relative to the workspace folder (e.g. src\\sub). Empty = workspace folder",
     viewFolderPick: "Choose Folder…",
     openSetting: "Open Setting",
@@ -365,7 +377,7 @@ const MESSAGES = {
     ignoreAlready: 'The pattern is already there: {0}',
     ignoreDoneProp: 'Added {1} to {0}. Commit the folder property change to share it.',
     ignoreDoneLocal: 'Added {0} to the global ignore list on this PC.',
-    ignoreUnversionedParent: 'The parent folder is not under SVN, so a property cannot be set: {0}',
+    ignoreUnversionedParent: "Left out folders whose parent is not under SVN (a property cannot be set there): {0}",
     logTitle: 'Log of {0}',
     logEmpty: 'No log entries.',
     logActionTitle: 'r{0} — what next?',
@@ -477,11 +489,19 @@ const MESSAGES = {
 };
 
 // 영역별 언어. area: 'menu' | 'scm' | 'message'. 영역 설정이 default면 전체 언어(svnTools.language)를 따른다.
+// 탐색기 툴팁처럼 자주 불려서 기억해 두고, 설정이 바뀌면 extension.js가 resetLanguageCache로 비운다.
+let cache = {};
 function languageFor(area) {
+  if (cache[area]) return cache[area];
   const config = vscode.workspace.getConfiguration('svnTools');
   let lang = config.get(`${area}Language`, 'default');
   if (lang === 'default') lang = config.get('language', 'en');
-  return MESSAGES[lang] ? lang : 'en';
+  cache[area] = MESSAGES[lang] ? lang : 'en';
+  return cache[area];
+}
+
+function resetLanguageCache() {
+  cache = {};
 }
 
 function language() {
@@ -503,4 +523,4 @@ function tFor(area, key, ...args) {
   return format(languageFor(area), key, args);
 }
 
-module.exports = { t, tFor, language, languageFor };
+module.exports = { t, tFor, language, languageFor, resetLanguageCache };

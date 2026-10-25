@@ -53,9 +53,47 @@ for (const k of used) {
   if (!enKeys.has(k)) problems.push(`영어 문구 없음: ${k}`);
 }
 
-console.log(`\n메뉴 구조: 명령 ${commands.size}, 하위 메뉴 ${submenus.size}, 메시지 키 ${used.size}`);
+// 웹뷰 화면 스크립트: html()이 만드는 <script>를 꺼내 문법을 보고, append/replaceChildren에 null이 들어갈 수 있는
+// 모양(`? el(...) : null`을 그대로 넘김)을 잡는다 — DOM은 null을 글자 "null"로 그린다(CLAUDE.md 함정 6, 두 번 겪음).
+const Module = require('module');
+const origLoad = Module._load;
+Module._load = function (req, ...rest) {
+  if (req === 'vscode') return { workspace: { getConfiguration: () => ({ get: (_k, d) => d }) } };
+  return origLoad.call(this, req, ...rest);
+};
+const VIEWS = [['commitView', 'CommitView'], ['ignoreView', 'IgnoreView'], ['reasonView', 'ReasonView']];
+for (const [file, cls] of VIEWS) {
+  const mod = require(path.join(root, 'src', file));
+  const html = mod[cls].prototype.html ? mod[cls].prototype.html.call({}) : mod.html();
+  const script = html.split(/<script[^>]*>/)[1].split('</script>')[0];
+  try {
+    new Function(script); // eslint-disable-line no-new-func
+  } catch (e) {
+    problems.push(`${file} 웹뷰 스크립트 문법 오류: ${e.message}`);
+  }
+  for (const problem of nullPassing(script)) problems.push(`${file}: ${problem}`);
+}
+
+// `const v = 조건 ? ... : null;`로 만든 변수를 replaceChildren/append에 걸러지지 않은 채 넘기는 곳.
+// 같은 호출 문장(세미콜론까지) 안에 .filter(Boolean)이 있으면 걸렀다고 본다.
+function nullPassing(script) {
+  const out = [];
+  const nullVars = [...script.matchAll(/const (\w+) = [^;\n]*\? [^;\n]*: null;/g)].map((m) => m[1]);
+  for (const call of script.matchAll(/\.(replaceChildren|append)\(([^;]*)\)/g)) {
+    const body = call[2];
+    if (body.includes('.filter(Boolean)')) continue;
+    for (const v of nullVars) if (new RegExp(`\\b${v}\\b`).test(body)) out.push(`${v}(null일 수 있음)를 ${call[1]}에 그대로 넘김`);
+  }
+  return out;
+}
+// 검사 자체가 잡는지 확인: 0.10.0 개발 중 실제로 낸 버그 모양
+if (nullPassing("const noteBox = note ? el('div') : null;\nroot.replaceChildren(a, noteBox, b);").length !== 1) {
+  problems.push('null 검사가 알려진 버그 모양을 잡지 못함');
+}
+
+console.log(`\n메뉴 구조: 명령 ${commands.size}, 하위 메뉴 ${submenus.size}, 메시지 키 ${used.size}, 웹뷰 ${VIEWS.length}`);
 if (problems.length) {
   console.log(problems.map((p) => `FAIL ${p}`).join('\n'));
   process.exit(1);
 }
-console.log('OK   메뉴 구조·메시지 키 일관성');
+console.log('OK   메뉴 구조·메시지 키 일관성, 웹뷰 스크립트');

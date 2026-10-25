@@ -23,6 +23,20 @@ function key(p) {
   return path.normalize(p).toLowerCase();
 }
 
+// p 또는 그 상위 폴더 중 하나가 keys(Set of key)에 있는가. 연 폴더(stopKey)에서 멈춘다.
+// "목록 전체와 하나씩 비교"하면 무시 항목이 수천 개인 작업 사본에서 탐색기 표시가 파일마다 ms 단위로 느려진다(검토로 측정).
+function hitAncestor(p, keys, stopKey) {
+  if (keys.size === 0) return false;
+  for (let cur = p; ;) {
+    const k = key(cur);
+    if (keys.has(k)) return true;
+    if (k === stopKey) return false;
+    const up = path.dirname(cur);
+    if (up === cur) return false;
+    cur = up;
+  }
+}
+
 function isInside(child, parent) {
   const c = key(child);
   const p = key(parent);
@@ -56,6 +70,14 @@ class Repository {
     this.url = info.url;
     this.statuses = new Map();   // key(path) → { path, code }
     this.ignored = [];           // 무시된 경로(폴더면 그 아래도 무시)
+    this.folderKey = key(this.folder);
+    // 조회용: 무시된 경로, 미등록 경로, 충돌 경로의 key
+    this.ignoredKeys = new Set();
+    this.unversionedKeys = new Set();
+    this.conflictKeys = new Set();
+    this.walkCache = new Map();  // 미등록 폴더 key → 그 안 항목의 VS Code 표기 목록(contextLists의 폴더 훑기 결과)
+    this.lists = { addable: [], stageable: [], staged: [], renamable: [] };
+    this.decoSig = '';
     this.memento = memento;
     this.stateKey = `svnTools.staged:${key(this.folder)}`;
     this.staged = new Map((memento.get(this.stateKey) || []).map((p) => [key(p), p]));  // key → path
@@ -91,6 +113,13 @@ class Repository {
       const p = uri.fsPath;
       if (/[\\/]\.(svn|git)([\\/]|$)/.test(p)) return;
       if (this.isIgnored(p)) return;
+      // 미등록 폴더 안이 바뀌면 그 폴더의 훑기 결과를 버린다(다음 contextLists에서 다시 훑는다). 상위로 올라가며 찾는다.
+      for (let cur = this.toReal(p); this.walkCache.size;) {
+        this.walkCache.delete(key(cur));
+        const up = path.dirname(cur);
+        if (up === cur || key(cur) === this.folderKey) break;
+        cur = up;
+      }
       this.scheduleRefresh();
     };
     watcher.onDidChange(onFs, null, this.disposables);
@@ -132,20 +161,22 @@ class Repository {
   }
 
   isIgnored(p) {
-    p = this.toReal(p);
-    return this.ignored.some((ig) => isInside(p, ig));
+    return hitAncestor(this.toReal(p), this.ignoredKeys, this.folderKey);
   }
 
   // 미등록 폴더 안의 항목도 미등록이다(svn status는 미등록 폴더 안으로 들어가지 않는다).
   isUnversioned(p) {
-    if (this.statusOf(p) === '?') return true;
-    return [...this.statuses.values()].some((s) => s.code === '?' && isInside(p, s.path));
+    return hitAncestor(this.toReal(p), this.unversionedKeys, this.folderKey);
   }
 
   isStaged(p) {
     const k = key(this.toReal(p));
     const s = this.statuses.get(k);
     return this.staged.has(k) || (!!s && isPlainAdd(s));
+  }
+
+  hasLocks() {
+    return this.lockCount > 0;
   }
 
   entry(p) {
@@ -160,8 +191,7 @@ class Repository {
 
   isLeftover(p) {
     if (!LEFTOVER.test(p)) return false;
-    const base = p.replace(LEFTOVER, '');
-    return [...this.statuses.values()].some((s) => isConflict(s.code) && key(s.path) === key(base));
+    return this.conflictKeys.has(key(p.replace(LEFTOVER, '')));
   }
 
   // ---- 스테이징 상태 (svn 작업은 commands.js가 하고, 여기서는 기억만 한다) ----
@@ -203,10 +233,18 @@ class Repository {
     if (this.renames.delete(key(to))) this.memento.update(this.renameKey, [...this.renames.values()]);
   }
 
-  // 아직 적용할 수 있는 이름 바꾸기 기록(옛 경로는 누락, 새 경로는 미등록일 때만). 사용자가 그사이 직접 고쳤으면 없다.
+  // 아직 적용할 수 있는 이름 바꾸기 기록(옛 경로는 누락, 새 경로는 미등록이거나 무시될 때만). 사용자가 그사이 직접 고쳤으면 없다.
+  // 새 이름이 무시 규칙에 걸려도(base.txt → base.bak) 되돌리거나 적용할 수 있어야 한다.
   renameOf(p) {
     const r = this.renames.get(key(this.toReal(p)));
-    return r && this.statusOf(r.from) === '!' && this.isUnversioned(r.to) ? r : undefined;
+    const fresh = r && (this.isUnversioned(r.to) || this.statusOf(r.to) === 'I');
+    return fresh && this.statusOf(r.from) === '!' ? r : undefined;
+  }
+
+  // 미등록 폴더 훑기 결과를 버린다. 파일 감시가 놓치는 변경(감시 제외 폴더, 네트워크 드라이브 등)이 있어서, 창으로 돌아올 때와
+  // Refresh 명령에서는 다시 훑는다.
+  forgetWalk() {
+    this.walkCache.clear();
   }
 
   scheduleRefresh(delay = 800) {
@@ -241,6 +279,7 @@ class Repository {
     }
     const statuses = new Map();
     const ignored = [];
+    this.lockCount = entries.filter((e) => e.lockToken).length;
     for (const e of entries) {
       const code = codeOf(e);
       if (!code || code === 'X') continue;
@@ -251,10 +290,14 @@ class Repository {
       statuses.set(key(e.path), { path: e.path, code, copied: e.copied, movedFrom: e.movedFrom, movedTo: e.movedTo, locked: e.locked });
     }
     // 덜 받은 폴더 안의 누락(!)은 진짜 삭제가 아니라 아직 못 받은 것일 수 있다 — 같이 N으로 둔다.
-    const incomplete = [...statuses.values()].filter((s) => s.code === 'N').map((s) => s.path);
-    for (const s of statuses.values()) if (s.code === '!' && incomplete.some((d) => isInside(s.path, d))) s.code = 'N';
+    const keysOf = (pred) => new Set([...statuses.values()].filter(pred).map((s) => key(s.path)));
+    const incomplete = keysOf((s) => s.code === 'N');
+    for (const s of statuses.values()) if (s.code === '!' && hitAncestor(s.path, incomplete, this.folderKey)) s.code = 'N';
     this.statuses = statuses;
     this.ignored = ignored;
+    this.ignoredKeys = new Set(ignored.map(key));
+    this.unversionedKeys = keysOf((s) => s.code === '?');
+    this.conflictKeys = keysOf((s) => isConflict(s.code));
 
     // 더 이상 커밋할 변경이 없는 경로(되돌렸거나 커밋됨)와 미등록·충돌로 바뀐 경로는 스테이징에서 뺀다.
     let pruned = false;
@@ -272,32 +315,40 @@ class Repository {
     this.render();
   }
 
+  // 패널 그룹을 다시 나누고, 탐색기 메뉴 조건 목록(lists)과 탐색기 표시용 요약(decoSig)을 새로 만든다.
+  // extension.js onRepoChange는 둘을 이전 값과 비교해 바뀐 것만 UI로 보낸다.
   render() {
     const staged = [];
     const changes = [];
     const unversioned = [];
     const conflicts = [];
+    const fade = vscode.workspace.getConfiguration('svnTools').get('scm.fadeUnversioned', true);
+    const state = (s, group) => this.resourceState(s.path, s.code, group, fade);
+    const sig = [];
     for (const s of this.statuses.values()) {
-      if (isConflict(s.code)) conflicts.push(this.resourceState(s.path, s.code, 'conflicted'));
-      else if (s.code === 'N') changes.push(this.resourceState(s.path, s.code, 'incomplete'));
-      else if (s.code === '?') unversioned.push(this.resourceState(s.path, s.code, 'unversioned'));
-      else if (this.isStaged(s.path)) staged.push(this.resourceState(s.path, s.code, 'staged'));
-      else changes.push(this.resourceState(s.path, s.code, 'changed'));
+      const isStaged = this.isStaged(s.path);
+      sig.push(`${key(s.path)}|${s.code}|${isStaged ? 1 : 0}`);
+      if (isConflict(s.code)) conflicts.push(state(s, 'conflicted'));
+      else if (s.code === 'N') changes.push(state(s, 'incomplete'));
+      else if (s.code === '?') unversioned.push(state(s, 'unversioned'));
+      else if (isStaged) staged.push(state(s, 'staged'));
+      else changes.push(state(s, 'changed'));
     }
+    this.decoSig = sig.join('\n') + '\n#' + [...this.ignoredKeys].join('\n');
+    this.lists = this.contextLists();
     const byPath = (a, b) => a.resourceUri.fsPath.localeCompare(b.resourceUri.fsPath);
     this.stagedGroup.resourceStates = staged.sort(byPath);
     this.changes.resourceStates = changes.sort(byPath);
     this.unversioned.resourceStates = unversioned.sort(byPath);
     this.conflicts.resourceStates = conflicts.sort(byPath);
     this.sourceControl.count = staged.length + changes.length + conflicts.length;
-    this.onDidChange();
+    this.onDidChange(this);
   }
 
   // contextValue: staged | changed | unversioned | conflicted | incomplete (메뉴 조건 scmResourceState에 쓴다)
-  resourceState(p, code, group) {
+  resourceState(p, code, group, fade) {
     const uri = vscode.Uri.file(this.toUi(p));
     const deleted = code === 'D' || code === '!';
-    const fade = vscode.workspace.getConfiguration('svnTools').get('scm.fadeUnversioned', true);
     return {
       resourceUri: uri,
       contextValue: group,
@@ -317,14 +368,20 @@ class Repository {
     const staged = new Set();
     const renamable = [...this.renames.values()].filter((r) => this.renameOf(r.to)).map((r) => this.toUi(r.to));
     const ui = (p) => this.toUi(p);
+    // 상위 폴더는 늘 통째로 들어가므로, 이미 들어간 폴더를 만나면 그 위도 들어 있다.
     const withParents = (set, p) => {
       for (let cur = p; isInside(cur, this.folder); cur = path.dirname(cur)) {
-        set.add(ui(cur));
-        if (key(cur) === key(this.folder) || path.dirname(cur) === cur) break;
+        const u = ui(cur);
+        if (set.has(u)) break;
+        set.add(u);
+        if (key(cur) === this.folderKey || path.dirname(cur) === cur) break;
       }
     };
+    // 미등록 폴더 안 훑기는 폴더별로 기억해 두고(walkCache), 그 안에서 파일 감시 이벤트가 나면 버린다.
+    // 상한(MAX_WALK)에 걸려 덜 훑은 결과는 기억하지 않는다(다른 폴더가 줄어 여유가 생기면 다음에 다시 훑게).
     let walked = 0;
-    const walk = (dir) => {
+    let truncated = false;
+    const walk = (dir, out) => {
       let names;
       try {
         names = fs.readdirSync(dir, { withFileTypes: true });
@@ -332,19 +389,42 @@ class Repository {
         return;
       }
       for (const d of names) {
-        if (walked >= MAX_WALK) return;
+        if (walked >= MAX_WALK) {
+          truncated = true;
+          return;
+        }
         const p = path.join(dir, d.name);
         walked++;
-        addable.add(ui(p));
-        if (d.isDirectory()) walk(p);
+        out.push(ui(p));
+        if (d.isDirectory()) walk(p, out);
       }
     };
+    const cache = new Map();
     for (const s of this.statuses.values()) {
       if (s.code === '?') {
         addable.add(ui(s.path));
         // 새 항목을 품은 관리 폴더에도 SVN Stage ▸가 뜨게 한다(스테이징하면 안의 새 항목은 add된다). 수정 파일을 품은 폴더와 같게.
         if (key(path.dirname(s.path)) !== key(s.path)) withParents(stageable, path.dirname(s.path));
-        if (walked < MAX_WALK && fs.existsSync(s.path) && fs.statSync(s.path).isDirectory()) walk(s.path);
+        const k = key(s.path);
+        let items = this.walkCache.get(k);
+        let complete = !!items;
+        if (items) {
+          walked += items.length;
+        } else {
+          let isDir = false;
+          try {
+            isDir = fs.statSync(s.path).isDirectory();
+          } catch {
+            // 사라진 항목
+          }
+          if (!isDir) continue;
+          items = [];
+          truncated = walked >= MAX_WALK;
+          if (!truncated) walk(s.path, items);
+          complete = !truncated;
+        }
+        if (complete) cache.set(k, items);
+        for (const u of items) addable.add(u);
       } else if (isConflict(s.code) || s.code === 'N') {
         continue;
       } else if (this.isStaged(s.path)) {
@@ -353,6 +433,7 @@ class Repository {
         withParents(stageable, s.path);
       }
     }
+    this.walkCache = cache;
     return { addable: [...addable], stageable: [...stageable], staged: [...staged], renamable };
   }
 
@@ -371,4 +452,4 @@ function baseUri(fsPath, rev) {
   });
 }
 
-module.exports = { Repository, baseUri, isInside, key, isPlainAdd };
+module.exports = { Repository, baseUri, isInside, key, isPlainAdd, hitAncestor };

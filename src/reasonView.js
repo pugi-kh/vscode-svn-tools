@@ -209,4 +209,4 @@ send({ op: 'refresh' });
 </body></html>`;
 }
 
-module.exports = { ReasonView };
+module.exports = { ReasonView, html };  // html은 test/manifest-check.js가 스크립트를 검사하려고 쓴다

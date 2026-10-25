@@ -12,7 +12,7 @@ const pkg = {
   name: 'vscode-svn-tools',
   displayName: 'SVN Tools',
   description: 'SVN Source Control panel, explorer context menu (SVN / TortoiseSVN) and status decorations including ignored files.',
-  version: '0.10.0',
+  version: '0.10.1',
   publisher: 'khoon',
   license: 'MIT',
   repository: { type: 'git', url: 'https://github.com/pugi-kh/vscode-svn-tools.git' },
