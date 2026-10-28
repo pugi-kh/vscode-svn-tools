@@ -21,6 +21,11 @@ const pkg = {
   private: true,
   engines: { vscode: '^1.80.0' },
   categories: ['SCM Providers'],
+  // 마켓플레이스·확장 검색어(최대 30개). git 확장이 아니므로 git은 넣지 않는다.
+  keywords: [
+    'svn', 'subversion', 'tortoisesvn', 'tortoise', 'scm', 'source control', 'version control',
+    'svn ignore', 'staging', 'commit', 'diff', 'blame', 'log',
+  ],
   extensionKind: ['workspace'],
   activationEvents: ['onStartupFinished'],
   main: './src/extension.js',

@@ -20,6 +20,21 @@
   "categories": [
     "SCM Providers"
   ],
+  "keywords": [
+    "svn",
+    "subversion",
+    "tortoisesvn",
+    "tortoise",
+    "scm",
+    "source control",
+    "version control",
+    "svn ignore",
+    "staging",
+    "commit",
+    "diff",
+    "blame",
+    "log"
+  ],
   "extensionKind": [
     "workspace"
   ],
