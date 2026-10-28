@@ -191,6 +191,9 @@ for f in src/*.js; do node --check "$f"; done        # 문법만 빠르게 (git 
   (`rescanAll` — 파일 감시가 놓치는 변경이 있다).
 - **무시된 폴더 안의 파일도 회색**: `svn status --no-ignore`는 무시된 폴더 자체만 알려 준다. `Repository.statusOf()`가 상위
   폴더 중 무시된 것이 있으면 `'I'`를 돌려준다.
+- **미등록 폴더 안의 파일도 U**: svn status는 미등록 폴더 안으로 들어가지 않아 폴더 한 줄만 준다. 탐색기 표시
+  (`decorations.js`)에서만 `isUnversioned`로 상위를 따라 올라가 `?`로 본다. `statusOf`는 바꾸지 않는다 — `commands.js`가
+  "미등록 폴더 안은 `undefined`"를 전제로 판정한다. Source Control 패널은 지금처럼 폴더 한 줄만 둔다.
 - **무시 목록 편집은 저장 버튼 방식**: 화면에 편집 사본을 두고, 저장 때 "추가·수정·삭제한 것"만 보낸다. 확장은 svn의 현재 값을
   다시 읽고 그 위에 얹는다(`applyChange`) — 화면을 연 뒤 밖에서 바뀐 패턴을 덮어쓰지 않게. 루트에는 `svn:ignore`·
   `svn:global-ignores` 카드를 규칙이 없어도 항상 보인다(global-ignores를 걸 자리가 안 보이던 문제).
