@@ -1130,6 +1130,9 @@ function createCommands(ctx) {
     historyRefresh: command(async () => ctx.history.refresh()),
     historyCopyMessage: command(async (node) => ctx.history.copyMessage(node)),
 
+    // svn 명령줄 도구 설치(svnSetup.js). svn이 없을 때의 알림을 닫았어도 팔레트에서 다시 할 수 있게.
+    setupSvn: command(async () => ctx.setupSvn()),
+
     log: command(async (...args) => {
       const list = toUris(args);
       const repo = repoOfArgs(args, list.map((u) => u.fsPath));

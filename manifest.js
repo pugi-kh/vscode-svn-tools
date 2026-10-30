@@ -9,10 +9,10 @@ const path = require('path');
 const { LANGUAGES } = require('./src/languages');
 
 const pkg = {
-  name: 'vscode-svn-tools',
+  name: 'svn-tools',
   displayName: 'SVN Tools',
   description: 'SVN Source Control panel, explorer context menu (SVN / TortoiseSVN) and status decorations including ignored files.',
-  version: '1.0.0',
+  version: '1.0.1',
   publisher: 'khoon',
   // 마켓플레이스는 SVG 아이콘을 받지 않아 256px PNG를 쓴다.
   icon: 'images/icon.png',
@@ -29,6 +29,11 @@ const pkg = {
     'svn ignore', 'staging', 'commit', 'diff', 'blame', 'log',
   ],
   extensionKind: ['workspace'],
+  // 제한 모드(신뢰하지 않은 폴더)에서는 svn을 실행하지 않는다. 선언해 두면 VS Code가 꺼진 이유를 화면에 안내한다.
+  capabilities: {
+    untrustedWorkspaces: { supported: false, description: 'SVN Tools runs svn commands in the opened folder, so it needs a trusted workspace.' },
+    virtualWorkspaces: false,
+  },
   activationEvents: ['onStartupFinished'],
   main: './src/extension.js',
   scripts: {
@@ -74,6 +79,7 @@ const COMMANDS = [
   ['copyUrl', 'Copy SVN URL', 'SVN URL 복사'],
   ['historyRefresh', 'Refresh History', '이력 새로고침', '$(refresh)'],
   ['historyCopyMessage', 'Copy Commit Message', '커밋 메시지 복사', '$(copy)'],
+  ['setupSvn', 'Install svn Command Line Tools…', 'svn 명령줄 도구 설치…'],
 ];
 
 // TortoiseSVN 창으로 여는 명령. id는 src/tortoise.js의 COMMANDS 키와 같다. 영어 이름은 TortoiseSVN 메뉴와 맞춘다.
@@ -251,6 +257,8 @@ const menus = {
   // 팔레트에는 설정 언어 쪽의 PALETTE 명령과 TortoiseSVN 명령만 보인다. 나머지는 고른 항목이 있어야 뜻이 있다.
   commandPalette: commands.map((c) => {
     const [, id, lang] = /^svnTools\.(.+)\.(\w+)$/.exec(c.command);
+    // svn 설치는 svn이 없어 작업 사본을 못 연 상태(svnTools.active 거짓)에서 쓴다
+    if (id === 'setupSvn') return { command: c.command, when: langWhen(lang) };
     const shown = PALETTE.includes(id) || id.startsWith('tortoise.');
     return { command: c.command, when: shown ? and(langWhen(lang), 'svnTools.active') : 'false' };
   }),
@@ -351,7 +359,8 @@ const configuration = {
     },
     'svnTools.svnPath': {
       type: 'string', default: '',
-      description: 'svn.exe 경로. 비우면 PATH의 svn, 없으면 TortoiseSVN의 svn.exe / Path to svn.exe',
+      description: 'svn.exe 경로. 비우거나 없는 경로면 PATH → TortoiseSVN 폴더 → SlikSVN 폴더 → 시스템 PATH(레지스트리) 순서로 찾는다 / '
+        + 'Path to svn.exe. If empty or missing: PATH, TortoiseSVN folder, SlikSVN folder, then the system PATH from the registry',
     },
     'svnTools.tortoiseProcPath': {
       type: 'string', default: '',

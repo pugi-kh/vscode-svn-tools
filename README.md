@@ -20,8 +20,13 @@ VS Code 안에서 하고, 필요하면 우클릭 한 번으로 TortoiseSVN 창�
 ## 시작하기
 
 **필요한 것**
-- **SVN 명령줄 클라이언트** `svn`. PATH에 없으면 TortoiseSVN에 딸린 `svn.exe`를 찾아 씁니다.
-  TortoiseSVN을 설치할 때 "command line client tools"를 함께 설치하면 됩니다.
+- **SVN 명령줄 클라이언트** `svn`. PATH, TortoiseSVN(`C:\Program Files\TortoiseSVN\bin`), SlikSVN 순서로 찾습니다.
+  **TortoiseSVN 기본 설치에는 들어 있지 않습니다**("command line client tools" 항목이 기본으로 꺼져 있음).
+  - 없으면 작업 사본을 열 때 알림이 뜹니다. **[설치…]** 를 누르면 winget으로 설치합니다(관리자 권한 필요).
+    TortoiseSVN이 있으면 명령줄 도구만 추가하고, 없으면 SlikSVN(svn만)과 TortoiseSVN(탐색기 메뉴 포함) 중에서 고릅니다.
+    설치가 끝나면 다시 시작하지 않아도 바로 동작합니다. 알림을 닫았으면 명령 팔레트의 **SVN: svn 명령줄 도구 설치…**(영어 메뉴: Install svn Command Line Tools…).
+  - 직접 설치하려면: TortoiseSVN 설치 파일을 다시 실행해 **Modify** → "command line client tools"를 추가하거나,
+    `winget install Slik.Subversion`. 다른 곳에 있는 svn은 알림의 **[svn.exe 위치 지정]** 이나 설정 `svnTools.svnPath`로 지정합니다.
 - TortoiseSVN 메뉴를 쓰려면 **TortoiseSVN**이 설치돼 있어야 합니다(없어도 나머지 기능은 동작합니다).
 
 **처음 쓸 때**
@@ -238,7 +243,7 @@ Clean Up, Settings. 창을 닫으면 상태를 새로고침합니다.
 | `svnTools.history.autoRefreshMinutes` | `5` | 위 자동 확인 간격(분, 최소 1) |
 | `svnTools.scm.fadeUnversioned` | `true` | 패널에서 미등록 파일을 흐리게 |
 | `svnTools.decorations.enabled` | `true` | 탐색기 상태 표시 |
-| `svnTools.svnPath` | (비움) | `svn.exe` 경로. 비우면 PATH의 svn, 없으면 TortoiseSVN의 svn.exe |
+| `svnTools.svnPath` | (비움) | `svn.exe` 경로. 비우거나 없는 경로면 PATH → TortoiseSVN 폴더 → SlikSVN 폴더 → 시스템 PATH 순서로 찾음 |
 | `svnTools.tortoiseProcPath` | (비움) | `TortoiseProc.exe` 경로. 비우면 기본 설치 위치 |
 
 ---
@@ -246,8 +251,9 @@ Clean Up, Settings. 창을 닫으면 상태를 새로고침합니다.
 ## 문제 해결
 
 **Source Control 패널에 SVN이 안 나와요.**
-연 폴더가 SVN 작업 사본(또는 그 안)인지 확인하세요. `svn`을 찾지 못해도 패널이 나타나지 않습니다(출력 창 "SVN Tools"에
-`svn not found`가 남습니다). 설치 위치가 특별하면 `svnTools.svnPath`에 `svn.exe` 경로를 넣습니다.
+연 폴더가 SVN 작업 사본(또는 그 안)인지 확인하세요. `svn`을 찾지 못해도 패널이 나타나지 않습니다 — 출력 창 "SVN Tools"의
+첫 줄 `svn: …`에서 어느 svn을 쓰는지(또는 `not found`) 볼 수 있습니다. 설치는 위 [시작하기](#시작하기)를 보세요.
+폴더를 열 때 "신뢰하지 않음"을 골랐으면(제한 모드) 이 확장은 동작하지 않습니다.
 
 **우클릭 메뉴가 두 벌로 보이거나 패널이 두 개예요.**
 다른 SVN 확장이 켜져 있는 것입니다. 그 확장을 꺼 주세요.

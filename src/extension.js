@@ -5,6 +5,7 @@ const { Repository } = require('./repository');
 const { DecorationProvider } = require('./decorations');
 const { createCommands } = require('./commands');
 const { HistoryView } = require('./historyView');
+const { SvnSetup } = require('./svnSetup');
 const { COMMANDS: TORTOISE_COMMANDS } = require('./tortoise');
 const { LANGUAGES } = require('./languages');
 const { resetLanguageCache } = require('./i18n');
@@ -42,21 +43,35 @@ function activate(context) {
   // 미등록 폴더 안까지 다시 훑는 새로고침(파일 감시가 놓친 변경을 잡는다): 창으로 돌아올 때, Refresh 명령
   const rescanAll = () => Promise.all(repositories.map((r) => { r.forgetWalk(); return r.refresh(); }));
   const ctx = { output, repositories: () => repositories, refreshAll, rescanAll };
+  ctx.setupSvn = () => setup.install();
   ctx.history = new HistoryView(ctx);
   context.subscriptions.push(ctx.history);
 
+  // svn이 없을 때의 안내·설치(svnSetup.js). svn을 새로 찾으면 아직 못 연 작업 폴더를 다시 연다.
+  const setup = new SvnSetup(output, () => Promise.all((vscode.workspace.workspaceFolders || []).map(openFolder)));
+  output.appendLine(`svn: ${svn.findSvn() || 'not found'}`);
+
   // ---- 작업 사본 찾기: 작업 폴더마다 svn info가 되는지 본다 ----
+  // 이미 열었거나 여는 중인 폴더는 건너뛴다. 시작·폴더 추가·svn 설치 후 다시 열기가 겹치면 같은 폴더의 패널이 두 개 생겼다(검토로 지적).
+  const opening = new Set();
   async function openFolder(folder) {
     if (folder.uri.scheme !== 'file') return;
+    const dir = svn.realPath(folder.uri.fsPath);
+    if (opening.has(dir) || repositories.some((r) => r.folder === dir)) return;
+    opening.add(dir);
     try {
-      const dir = svn.realPath(folder.uri.fsPath);
       const { stdout } = await svn.exec(['info', '--xml', dir], dir);
       const repo = new Repository(folder, svn.parseInfo(stdout), context.workspaceState, onRepoChange);
       repositories.push(repo);
       await repo.refresh();
     } catch (e) {
-      if (e.code === 'ENOENT') output.appendLine('svn not found');
+      if (e.code === 'ENOENT') {
+        output.appendLine(`svn not found (${dir})`);
+        setup.missing(dir);
+      }
       // 작업 사본이 아니면 조용히 넘어간다.
+    } finally {
+      opening.delete(dir);
     }
     // 저장소가 생겼으면 첫 새로고침의 render가 이미 onRepoChange를 불렀다 — 여기서는 활성 여부만 알린다.
     vscode.commands.executeCommand('setContext', 'svnTools.active', repositories.length > 0);
@@ -164,6 +179,9 @@ function activate(context) {
     }
     if (e.affectsConfiguration('svnTools.scm')) refreshAll();
     if (e.affectsConfiguration('svnTools.history')) ctx.history.reloadConfig();
+    if (e.affectsConfiguration('svnTools.svnPath') || e.affectsConfiguration('svnTools.tortoiseProcPath')) {
+      setup.recheck().catch((err) => setup.fail(err));
+    }
     if (e.affectsConfiguration('svnTools')) decorations.refresh();
   }));
 }

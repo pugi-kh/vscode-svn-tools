@@ -1,8 +1,8 @@
 {
-  "name": "vscode-svn-tools",
+  "name": "svn-tools",
   "displayName": "SVN Tools",
   "description": "SVN Source Control panel, explorer context menu (SVN / TortoiseSVN) and status decorations including ignored files.",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "publisher": "khoon",
   "icon": "images/icon.png",
   "license": "MIT",
@@ -39,6 +39,13 @@
   "extensionKind": [
     "workspace"
   ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "SVN Tools runs svn commands in the opened folder, so it needs a trusted workspace."
+    },
+    "virtualWorkspaces": false
+  },
   "activationEvents": [
     "onStartupFinished"
   ],
@@ -221,6 +228,11 @@
         "title": "Copy Commit Message",
         "category": "SVN",
         "icon": "$(copy)"
+      },
+      {
+        "command": "svnTools.setupSvn.en",
+        "title": "Install svn Command Line Tools…",
+        "category": "SVN"
       },
       {
         "command": "svnTools.tortoise.update.en",
@@ -497,6 +509,11 @@
         "title": "커밋 메시지 복사",
         "category": "SVN",
         "icon": "$(copy)"
+      },
+      {
+        "command": "svnTools.setupSvn.ko",
+        "title": "svn 명령줄 도구 설치…",
+        "category": "SVN"
       },
       {
         "command": "svnTools.tortoise.update.ko",
@@ -1363,6 +1380,10 @@
           "when": "false"
         },
         {
+          "command": "svnTools.setupSvn.en",
+          "when": "(config.svnTools.menuLanguage == 'en' || config.svnTools.menuLanguage == 'default' && config.svnTools.language == 'en')"
+        },
+        {
           "command": "svnTools.tortoise.update.en",
           "when": "(config.svnTools.menuLanguage == 'en' || config.svnTools.menuLanguage == 'default' && config.svnTools.language == 'en') && svnTools.active"
         },
@@ -1573,6 +1594,10 @@
         {
           "command": "svnTools.historyCopyMessage.ko",
           "when": "false"
+        },
+        {
+          "command": "svnTools.setupSvn.ko",
+          "when": "(config.svnTools.menuLanguage == 'ko' || config.svnTools.menuLanguage == 'default' && config.svnTools.language == 'ko')"
         },
         {
           "command": "svnTools.tortoise.update.ko",
@@ -2059,7 +2084,7 @@
           "svnTools.svnPath": {
             "type": "string",
             "default": "",
-            "description": "svn.exe 경로. 비우면 PATH의 svn, 없으면 TortoiseSVN의 svn.exe / Path to svn.exe"
+            "description": "svn.exe 경로. 비우거나 없는 경로면 PATH → TortoiseSVN 폴더 → SlikSVN 폴더 → 시스템 PATH(레지스트리) 순서로 찾는다 / Path to svn.exe. If empty or missing: PATH, TortoiseSVN folder, SlikSVN folder, then the system PATH from the registry"
           },
           "svnTools.tortoiseProcPath": {
             "type": "string",

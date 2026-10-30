@@ -1,7 +1,7 @@
-# vscode-svn-tools (SVN Tools) — 개발 안내
+# svn-tools (SVN Tools) — 개발 안내
 
 VS Code용 SVN 확장. Source Control 패널, 탐색기 우클릭(SVN / TortoiseSVN), 탐색기 상태 표시(무시된 파일 회색 포함),
-무시 목록 편집 화면을 한 확장으로 제공한다. ID `khoon.vscode-svn-tools`. 사용법은 `README.md`, 변경 이력은 `CHANGELOG.md`.
+무시 목록 편집 화면을 한 확장으로 제공한다. ID `khoon.svn-tools`(저장소 이름은 vscode-svn-tools). 사용법은 `README.md`, 변경 이력은 `CHANGELOG.md`.
 
 **이 문서는 고치는 사람용이다.** 특히 "함정" 절은 실제로 겪은 문제다 — 코드만 보고 되돌리지 말 것.
 
@@ -22,7 +22,8 @@ VS Code용 SVN 확장. Source Control 패널, 탐색기 우클릭(SVN / Tortoise
 | `src/repository.js` | 작업 폴더 하나의 상태(`svn status --no-ignore`)와 Source Control 패널, 파일 감시 |
 | `src/commands.js` | 명령 처리. 인자 모양 맞추기(`toUris`), 커밋 흐름, 로그, ignore 추가 등 |
 | `src/decorations.js` | 탐색기 배지·색 |
-| `src/svn.js` | svn 실행(`exec`), 경로 표기 맞추기(`realPath`), 출력 디코딩, XML 해석 |
+| `src/svn.js` | svn 찾기(`findSvn`), svn 실행(`exec`), 경로 표기 맞추기(`realPath`), 출력 디코딩, XML 해석 |
+| `src/svnSetup.js` | svn 명령줄 도구가 없을 때 안내·winget 설치·위치 지정 |
 | `src/ignore.js` | 무시 패턴 읽기·쓰기(폴더 속성, `%APPDATA%\Subversion\config`) |
 | `src/ignoreView.js` | 무시 목록 편집 화면(웹뷰, 저장 버튼 방식) |
 | `src/reasonView.js` | 무시된 원인 화면(웹뷰, 규칙 카드) |
@@ -44,7 +45,7 @@ VS Code용 SVN 확장. Source Control 패널, 탐색기 우클릭(SVN / Tortoise
 npm test                                             # 한글·공백 경로 회귀 검사(실제 작업 사본은 안 건드림) + 메뉴 구조 검사
 npm run install-vscode                               # 빌드 + 설치 한 번에(install.js)
 npm run package                                      # package.json 생성 + .vsix
-code --install-extension vscode-svn-tools-<버전>.vsix   # 설치 → VS Code에서 Developer: Reload Window
+code --install-extension svn-tools-<버전>.vsix   # 설치 → VS Code에서 Developer: Reload Window
 for f in src/*.js; do node --check "$f"; done        # 문법만 빠르게 (git bash)
 ```
 
@@ -230,6 +231,28 @@ for f in src/*.js; do node --check "$f"; done        # 문법만 빠르게 (git 
   고르는 동안(`input`)은 미리보기만 바꾸고 고르기 창을 닫을 때(`change`) 저장한다. 미리보기와 hex는 웹뷰의 테마 변수
   (`--vscode-svnTools-*`)에서 읽어 지금 실제로 적용된 색을 보인다. 작업 공간·테마별 값이 있으면 그쪽이 이겨서 경고만 띄운다.
   `<input type="color">`는 투명도를 못 다뤄서 테마별 색·투명도는 settings.json 안내로 둔다.
+- **svn을 찾는 순서와 설치**(`svn.findSvn`, `svnSetup.js`): 설정 값 → PATH → TortoiseSVN 폴더(`tortoiseProcPath` 포함)·SlikSVN 기본 위치
+  → 레지스트리의 최신 PATH. 설정 값이 디스크에 없으면 건너뛴다(남은 설정 때문에 설치 후에도 "이미 있음"·못 찾음이 됐다).
+  - TortoiseSVN 기본 설치에는 svn.exe가 없다(MSI의 `CLI` 항목이 설치 수준 200, 기본 꺼짐). 그래서 처음 쓰는 사람이 "설치했는데 아무
+    변화가 없다"를 겪었다(사용자 동료). 작업 사본(`.svn`이 있는 폴더)을 열 때 svn이 없으면 한 번 알리고 winget 설치를 제안한다.
+  - CLI는 TortoiseSVN 본체(`DefaultFeature`, 제외 불가)의 하위 항목이라 CLI만 설치할 수는 없다. TortoiseSVN이 있으면
+    `ADDLOCAL=ALL`로 빠진 항목을 채우고(버전이 달라 업그레이드가 돼도 기존 항목이 빠지지 않게 ALL), 없으면 SlikSVN·TortoiseSVN 중 고른다.
+    같은 버전이면 `--force`는 재설치가 아니라 기능 추가(유지 관리 설치)다. 대신 꺼 둔 선택 항목도 켜지고, 버전이 다르면 업그레이드라
+    탐색기가 다시 시작될 수 있어 항목 설명에 적고, TortoiseSVN이 있어도 기존 설치를 건드리지 않는 SlikSVN을 함께 보인다.
+  - **`--override`에는 `/norestart`를 반드시 넣는다.** override는 winget 기본 인자(`/norestart` 포함)를 통째로 대신해서, 빠지면
+    TortoiseSVN(탐색기에 올라가 있는 DLL) 설치가 묻지 않고 재부팅할 수 있다(검토로 지적).
+  - 설치는 작업(Task)으로 터미널에 보이게 실행하되 **셸을 거치지 않는다**(`ProcessExecution`) — PowerShell을 거치면 종료 코드가 0/1로
+    뭉개진다. 끝나면 **종료 코드와 상관없이 먼저 다시 찾는다**(winget은 "이미 설치됨"·재부팅 필요에도 0이 아니다). 못 찾았을 때만
+    원인을 안내하고, 찾아본 위치를 출력 창에 남긴다. 레지스트리 PATH를 보는 이유: VS Code는 시작할 때의 PATH를 계속 써서,
+    SlikSVN이 PATH에 추가돼도 재시작 전에는 안 보인다. 레지스트리 출력은 CP949라 `decode()`로 읽고, 보이지 않는 방향 문자를 지운다
+    (실제 PC의 PATH에 U+202A가 붙은 항목이 있었다).
+  - 실행 실패(ENOENT) 때의 다시 찾기는 한 번, 10초에 한 번까지(`rescanAfterFailure`) — svn이 없으면 명령마다 레지스트리를 동기로 읽었다.
+    설치·설정 변경 후의 다시 찾기(`recheck`)는 제한하지 않는다.
+  - 작업 폴더 열기는 여는 중인 폴더를 기억해 겹치면 건너뛴다(`extension.js opening`). 시작·폴더 추가·설치 후 다시 열기가 겹치면
+    같은 폴더의 패널이 둘 생겼다.
+  - **찾은 경로를 설정에 써 두지 않는다**. svn을 지우거나 옮기면 남은 설정 때문에 오히려 못 찾는다. 사용자가 직접 고른 경로만 쓴다.
+- **제한 모드에서는 동작하지 않는다**(`capabilities.untrustedWorkspaces.supported: false`): 연 폴더에서 svn을 실행하기 때문.
+  선언이 없으면 VS Code가 이유 없이 확장을 꺼서 "아무 변화가 없다"로 보인다.
 - **SVN 이력 칸**(`historyView.js`, 사용자 요청 — git 그래프 자리처럼 이력을 보고 싶다):
   - **현재 위치는 `svnversion`의 최댓값**이다. 폴더의 `svn info` 리비전을 쓰면 안 된다 — 커밋은 올린 파일만 새 리비전으로 바꾸고
     상위 폴더는 그대로라서, 내가 올린 커밋까지 "받지 않음"으로 보였다(사용자가 실제로 겪음). 섞인 리비전이면 툴팁에 범위를 보인다.

@@ -60,4 +60,4 @@ function open(name, paths, onExit) {
   if (onExit) child.on('exit', onExit);
 }
 
-module.exports = { open, COMMANDS };
+module.exports = { open, procPath, COMMANDS };
