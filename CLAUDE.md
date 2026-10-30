@@ -28,6 +28,8 @@ VS Code용 SVN 확장. Source Control 패널, 탐색기 우클릭(SVN / Tortoise
 | `src/reasonView.js` | 무시된 원인 화면(웹뷰, 규칙 카드) |
 | `src/colorView.js` | 상태 색 편집 화면(웹뷰, 색 고르기 → `workbench.colorCustomizations`) |
 | `src/commitView.js` | 커밋 확인 탭(웹뷰, 메시지와 올라갈 항목) |
+| `src/historyView.js` | SVN 이력 칸(Source Control 아래 트리 뷰, 커밋 목록·바뀐 파일·비교) |
+| `images/icon.png` | 확장 아이콘(256px PNG, 마켓플레이스는 SVG를 받지 않는다) |
 | `src/tortoise.js` | TortoiseProc.exe 실행 |
 | `src/i18n.js` | 알림·확인 창·웹뷰 문구 한/영 (메뉴 이름은 manifest.js) |
 | `src/languages.js` | 메뉴 언어 목록(`en`, `ko`) |
@@ -228,6 +230,17 @@ for f in src/*.js; do node --check "$f"; done        # 문법만 빠르게 (git 
   고르는 동안(`input`)은 미리보기만 바꾸고 고르기 창을 닫을 때(`change`) 저장한다. 미리보기와 hex는 웹뷰의 테마 변수
   (`--vscode-svnTools-*`)에서 읽어 지금 실제로 적용된 색을 보인다. 작업 공간·테마별 값이 있으면 그쪽이 이겨서 경고만 띄운다.
   `<input type="color">`는 투명도를 못 다뤄서 테마별 색·투명도는 settings.json 안내로 둔다.
+- **SVN 이력 칸**(`historyView.js`, 사용자 요청 — git 그래프 자리처럼 이력을 보고 싶다):
+  - **현재 위치는 `svnversion`의 최댓값**이다. 폴더의 `svn info` 리비전을 쓰면 안 된다 — 커밋은 올린 파일만 새 리비전으로 바꾸고
+    상위 폴더는 그대로라서, 내가 올린 커밋까지 "받지 않음"으로 보였다(사용자가 실제로 겪음). 섞인 리비전이면 툴팁에 범위를 보인다.
+  - 받지 않은 커밋은 작업 사본 경로에 `-r HEAD:1`로 읽는다(기본 범위는 BASE:1이라 안 나온다). 바뀐 파일은 펼칠 때 `-v -r N`으로 읽고,
+    비교는 저장소 URL@리비전을 `svn cat`한다(`svn-tools` 스킴의 `u` 쿼리 — 지금 작업 사본에 없는 파일일 수 있다).
+  - **이력 칸에서 작업 사본을 바꾸는 동작은 묻고 한다.** "서버의 새 커밋 N개" 줄을 누르면 바로 업데이트하던 때, 사용자가 무슨 일이
+    일어났는지 몰라 커밋된 줄 알고 놀랐다. 이 칸에서 서버로 올리는 동작은 없다.
+  - svn log는 서버를 부르므로 **칸이 보일 때만** 읽는다: 보이게 될 때, 커밋·업데이트 뒤, 커밋 전 확인에서 새 버전이 있을 때,
+    TortoiseSVN 창을 닫을 때, 창으로 돌아올 때(30초 간격), 자동 확인(`history.autoRefresh` + `autoRefreshMinutes`, 창이 앞에 있을 때만).
+    켜기와 간격을 따로 둔 건 "0이면 끔"이 설정 화면에서 알아보기 어렵다는 사용자 의견 때문이다.
+  - 칸 제목은 `TreeView.title`로 패널 언어(`scmLanguage`)에 맞춘다(package.json의 이름은 고정이라).
 - **Lock/Unlock은 2순위**: 직접 구현하지 않고 TortoiseSVN 메뉴로 쓴다.
 
 ## 고칠 때 절차

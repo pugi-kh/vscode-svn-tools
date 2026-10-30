@@ -4,6 +4,7 @@ const svn = require('./svn');
 const { Repository } = require('./repository');
 const { DecorationProvider } = require('./decorations');
 const { createCommands } = require('./commands');
+const { HistoryView } = require('./historyView');
 const { COMMANDS: TORTOISE_COMMANDS } = require('./tortoise');
 const { LANGUAGES } = require('./languages');
 const { resetLanguageCache } = require('./i18n');
@@ -41,6 +42,8 @@ function activate(context) {
   // 미등록 폴더 안까지 다시 훑는 새로고침(파일 감시가 놓친 변경을 잡는다): 창으로 돌아올 때, Refresh 명령
   const rescanAll = () => Promise.all(repositories.map((r) => { r.forgetWalk(); return r.refresh(); }));
   const ctx = { output, repositories: () => repositories, refreshAll, rescanAll };
+  ctx.history = new HistoryView(ctx);
+  context.subscriptions.push(ctx.history);
 
   // ---- 작업 사본 찾기: 작업 폴더마다 svn info가 되는지 본다 ----
   async function openFolder(folder) {
@@ -57,6 +60,7 @@ function activate(context) {
     }
     // 저장소가 생겼으면 첫 새로고침의 render가 이미 onRepoChange를 불렀다 — 여기서는 활성 여부만 알린다.
     vscode.commands.executeCommand('setContext', 'svnTools.active', repositories.length > 0);
+    ctx.history.reposChanged();
   }
 
   function closeFolder(folder) {
@@ -71,6 +75,7 @@ function activate(context) {
 
   function updateContext() {
     vscode.commands.executeCommand('setContext', 'svnTools.active', repositories.length > 0);
+    ctx.history.reposChanged();
     onRepoChange();
   }
 
@@ -106,7 +111,10 @@ function activate(context) {
   context.subscriptions.push(vscode.workspace.registerTextDocumentContentProvider('svn-tools', {
     async provideTextDocumentContent(uri) {
       try {
-        const { p, r } = JSON.parse(uri.query);
+        const { p, r, u, empty } = JSON.parse(uri.query);
+        if (empty) return '';
+        // 이력 뷰: 저장소 URL@리비전(작업 사본 밖이거나 지금은 없는 파일일 수 있다)
+        if (u) return (await svn.exec(['cat', `${u}@${r}`], require('os').homedir())).stdout;
         const file = svn.realPath(p);
         const { stdout } = await svn.exec(['cat', '-r', r, file], require('path').dirname(file));
         return stdout;
@@ -141,6 +149,7 @@ function activate(context) {
     if (s.focused && Date.now() - lastFocus > 2000) {
       lastFocus = Date.now();
       rescanAll();
+      ctx.history.refreshOnFocus();
     }
   }));
 
@@ -151,8 +160,10 @@ function activate(context) {
     }
     if (['language', 'scmLanguage', 'messageLanguage'].some((k) => e.affectsConfiguration(`svnTools.${k}`))) {
       repositories.forEach((r) => r.applyLanguage());
+      ctx.history.applyLanguage();
     }
     if (e.affectsConfiguration('svnTools.scm')) refreshAll();
+    if (e.affectsConfiguration('svnTools.history')) ctx.history.reloadConfig();
     if (e.affectsConfiguration('svnTools')) decorations.refresh();
   }));
 }

@@ -6,3 +6,5 @@ install.js
 .gitignore
 test/**
 CLAUDE.md
+images/**
+!images/icon.png

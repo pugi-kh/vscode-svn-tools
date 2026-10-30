@@ -234,6 +234,7 @@ function createCommands(ctx) {
     if (vscode.workspace.getConfiguration('svnTools').get('commit.checkOutOfDate', true)) {
       const outdated = await outOfDateCount(repo, targets);
       if (outdated > 0) {
+        ctx.history.refresh(repo);  // 확인 창을 보는 동안 이력 칸에서 새 커밋을 볼 수 있게
         const updateFirst = t('outOfDateUpdateFirst');
         const anyway = t('outOfDateCommitAnyway');
         const pick = await vscode.window.showWarningMessage(t('outOfDateAsk', outdated), { modal: true }, updateFirst, anyway);
@@ -259,6 +260,7 @@ function createCommands(ctx) {
     repo.unstage(committed);
     const rev = svn.lastRevision(stdout);
     vscode.window.showInformationMessage(rev ? t('commitDone', rev) : t('commitDoneNoRev'));
+    ctx.history.refresh(repo);
     return true;
   }
 
@@ -399,6 +401,7 @@ function createCommands(ctx) {
   async function runUpdate(repo, targets) {
     const { stdout } = await step('update', () => svn.exec(['update', ...targets], repo.folder));
     ctx.output.appendLine(stdout);
+    ctx.history.refresh(repo);
     return stdout;
   }
 
@@ -1123,6 +1126,10 @@ function createCommands(ctx) {
     // 상태 색 편집 화면(colorView.js). 설정 화면에는 색 고르기 입력이 없다.
     editColors: command(async () => ColorView.show()),
 
+    // SVN 이력 뷰(historyView.js)의 제목줄·항목 메뉴
+    historyRefresh: command(async () => ctx.history.refresh()),
+    historyCopyMessage: command(async (node) => ctx.history.copyMessage(node)),
+
     log: command(async (...args) => {
       const list = toUris(args);
       const repo = repoOfArgs(args, list.map((u) => u.fsPath));
@@ -1189,7 +1196,11 @@ function createCommands(ctx) {
         const repo = repoOfArgs(args, list);
         if (repo) list = [repo.folder];
       }
-      tortoise.open(name, list, () => ctx.refreshAll());
+      // TortoiseSVN 창에서 커밋·업데이트했을 수 있어 이력도 다시 읽는다
+      tortoise.open(name, list, () => {
+        ctx.refreshAll();
+        ctx.history.refresh();
+      });
     },
   };
 }

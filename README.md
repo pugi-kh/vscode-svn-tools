@@ -89,6 +89,20 @@ svn에는 스테이징이 없어서, 이 확장이 "다음 커밋에 넣을 항�
   (설정 `svnTools.commit.checkOutOfDate`).
 - **충돌**이 남은 항목은 svn이 커밋을 받지 않습니다. [충돌 해결…] 버튼으로 바로 해결 메뉴를 엽니다.
 
+### SVN 이력
+Source Control 화면 아래의 **SVN 이력** 칸에 최근 커밋 50개가 나옵니다(맨 아래 "더 보기…").
+
+| 표시 | 뜻 |
+|---|---|
+| 초록 ● **현재 위치** | 내 작업 사본이 받은 가장 새 커밋 |
+| 파란 ↓ **받지 않음** | 서버에만 있는 커밋. 맨 위 "서버의 새 커밋 N개"를 누르면 확인 후 업데이트합니다 |
+| 커밋 펼치기 | 바뀐 파일(A/M/D/R). 작업 폴더 밖 경로는 "(작업 폴더 밖)"으로 표시 |
+| 파일 클릭 | 그 커밋 직전 ↔ 직후 비교 |
+
+- 이력 칸은 보기만 합니다. 작업 사본을 바꾸는 것은 "서버의 새 커밋" 줄의 업데이트뿐이고, 누르면 먼저 묻습니다.
+- 서버는 이력 칸이 보일 때만 읽습니다: 칸을 열 때, 커밋·업데이트 뒤, 커밋 전 확인에서 새 버전이 있을 때, [새로고침],
+  VS Code로 돌아올 때(30초 간격), 그리고 창이 앞에 있는 동안 자동 확인(기본 5분, 설정 `svnTools.history.*`).
+
 ### 탐색기 우클릭
 항목 상태에 맞는 것만 바로 보이고, 나머지는 **SVN ▸**, **TortoiseSVN ▸** 하위 메뉴에 있습니다. 편집기 탭 우클릭에도 같은 메뉴가 있습니다.
 
@@ -220,6 +234,8 @@ Clean Up, Settings. 창을 닫으면 상태를 새로고침합니다.
 | `svnTools.commit.smartCommit` | `ask` | 스테이징이 비었을 때 Commit: `ask` 물어봄 / `always` 모두 스테이징하고 진행 / `never` 하지 않음 |
 | `svnTools.commit.checkOutOfDate` | `true` | 커밋 전에 서버에 더 새 버전이 있는지 확인 |
 | `svnTools.rename.askOnRename` | `true` | 탐색기에서 이름을 바꾸면 SVN 이름 바꾸기로 적용할지 묻기 |
+| `svnTools.history.autoRefresh` | `true` | SVN 이력 칸이 보이고 창이 앞에 있을 때 새 커밋을 주기적으로 확인 |
+| `svnTools.history.autoRefreshMinutes` | `5` | 위 자동 확인 간격(분, 최소 1) |
 | `svnTools.scm.fadeUnversioned` | `true` | 패널에서 미등록 파일을 흐리게 |
 | `svnTools.decorations.enabled` | `true` | 탐색기 상태 표시 |
 | `svnTools.svnPath` | (비움) | `svn.exe` 경로. 비우면 PATH의 svn, 없으면 TortoiseSVN의 svn.exe |

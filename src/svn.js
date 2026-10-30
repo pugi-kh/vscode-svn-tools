@@ -249,6 +249,22 @@ function lastRevision(text) {
   return m ? m[1] : undefined;
 }
 
+// 작업 사본의 리비전 범위 { min, max } (svnversion "9360:9386M"). 실패하면 undefined.
+// 커밋은 올린 파일만 새 리비전으로 바꾸고 상위 폴더는 그대로 둬서, 폴더의 svn info 리비전만 보면 내가 올린 커밋도
+// "받지 않음"으로 보인다(이력 뷰에서 실제로 겪음). svnversion은 svn.exe 옆에 있다.
+async function wcVersion(dir) {
+  const svnFile = svnPath();
+  const file = svnFile === 'svn' ? 'svnversion' : path.join(path.dirname(svnFile), 'svnversion.exe');
+  try {
+    const { stdout } = await run(file, [dir], dir);
+    const m = /^(\d+)(?::(\d+))?/.exec(stdout.trim());
+    return m ? { min: Number(m[1]), max: Number(m[2] || m[1]) } : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 module.exports = {
   exec, realPath, decode, parseStatus, parseInfo, parseInfoPaths, parseLog, parsePropget, parseInheritedProps, lastRevision, SvnError,
+  wcVersion,
 };

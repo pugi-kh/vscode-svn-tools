@@ -2,8 +2,9 @@
   "name": "vscode-svn-tools",
   "displayName": "SVN Tools",
   "description": "SVN Source Control panel, explorer context menu (SVN / TortoiseSVN) and status decorations including ignored files.",
-  "version": "0.11.0",
+  "version": "1.0.0",
   "publisher": "khoon",
+  "icon": "images/icon.png",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -208,6 +209,18 @@
         "command": "svnTools.copyUrl.en",
         "title": "Copy SVN URL",
         "category": "SVN"
+      },
+      {
+        "command": "svnTools.historyRefresh.en",
+        "title": "Refresh History",
+        "category": "SVN",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "svnTools.historyCopyMessage.en",
+        "title": "Copy Commit Message",
+        "category": "SVN",
+        "icon": "$(copy)"
       },
       {
         "command": "svnTools.tortoise.update.en",
@@ -472,6 +485,18 @@
         "command": "svnTools.copyUrl.ko",
         "title": "SVN URL 복사",
         "category": "SVN"
+      },
+      {
+        "command": "svnTools.historyRefresh.ko",
+        "title": "이력 새로고침",
+        "category": "SVN",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "svnTools.historyCopyMessage.ko",
+        "title": "커밋 메시지 복사",
+        "category": "SVN",
+        "icon": "$(copy)"
       },
       {
         "command": "svnTools.tortoise.update.ko",
@@ -1164,6 +1189,50 @@
           "when": "(config.svnTools.scmLanguage == 'ko' || config.svnTools.scmLanguage == 'default' && config.svnTools.language == 'ko') && scmProvider == svnTools"
         }
       ],
+      "view/title": [
+        {
+          "command": "svnTools.update.en",
+          "group": "navigation@1",
+          "when": "(config.svnTools.scmLanguage == 'en' || config.svnTools.scmLanguage == 'default' && config.svnTools.language == 'en') && view == svnTools.history"
+        },
+        {
+          "command": "svnTools.update.ko",
+          "group": "navigation@1",
+          "when": "(config.svnTools.scmLanguage == 'ko' || config.svnTools.scmLanguage == 'default' && config.svnTools.language == 'ko') && view == svnTools.history"
+        },
+        {
+          "command": "svnTools.historyRefresh.en",
+          "group": "navigation@2",
+          "when": "(config.svnTools.scmLanguage == 'en' || config.svnTools.scmLanguage == 'default' && config.svnTools.language == 'en') && view == svnTools.history"
+        },
+        {
+          "command": "svnTools.historyRefresh.ko",
+          "group": "navigation@2",
+          "when": "(config.svnTools.scmLanguage == 'ko' || config.svnTools.scmLanguage == 'default' && config.svnTools.language == 'ko') && view == svnTools.history"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "svnTools.historyCopyMessage.en",
+          "group": "inline",
+          "when": "(config.svnTools.scmLanguage == 'en' || config.svnTools.scmLanguage == 'default' && config.svnTools.language == 'en') && view == svnTools.history && viewItem == commit"
+        },
+        {
+          "command": "svnTools.historyCopyMessage.ko",
+          "group": "inline",
+          "when": "(config.svnTools.scmLanguage == 'ko' || config.svnTools.scmLanguage == 'default' && config.svnTools.language == 'ko') && view == svnTools.history && viewItem == commit"
+        },
+        {
+          "command": "svnTools.historyCopyMessage.en",
+          "group": "1_copy",
+          "when": "(config.svnTools.scmLanguage == 'en' || config.svnTools.scmLanguage == 'default' && config.svnTools.language == 'en') && view == svnTools.history && viewItem == commit"
+        },
+        {
+          "command": "svnTools.historyCopyMessage.ko",
+          "group": "1_copy",
+          "when": "(config.svnTools.scmLanguage == 'ko' || config.svnTools.scmLanguage == 'default' && config.svnTools.language == 'ko') && view == svnTools.history && viewItem == commit"
+        }
+      ],
       "commandPalette": [
         {
           "command": "svnTools.refresh.en",
@@ -1283,6 +1352,14 @@
         },
         {
           "command": "svnTools.copyUrl.en",
+          "when": "false"
+        },
+        {
+          "command": "svnTools.historyRefresh.en",
+          "when": "false"
+        },
+        {
+          "command": "svnTools.historyCopyMessage.en",
           "when": "false"
         },
         {
@@ -1487,6 +1564,14 @@
         },
         {
           "command": "svnTools.copyUrl.ko",
+          "when": "false"
+        },
+        {
+          "command": "svnTools.historyRefresh.ko",
+          "when": "false"
+        },
+        {
+          "command": "svnTools.historyCopyMessage.ko",
           "when": "false"
         },
         {
@@ -1907,6 +1992,15 @@
         }
       ]
     },
+    "views": {
+      "scm": [
+        {
+          "id": "svnTools.history",
+          "name": "SVN History",
+          "when": "svnTools.active"
+        }
+      ]
+    },
     "configuration": [
       {
         "title": "SVN Tools",
@@ -1930,6 +2024,17 @@
             "type": "boolean",
             "default": true,
             "markdownDescription": "**이름 바꾸기 알림 사용.** 탐색기(F2 등)에서 관리 중인 파일·폴더 이름을 바꾸면 SVN 이름 바꾸기(이력 유지)로 적용할지 묻는다. 알림의 \"다시 묻지 않음\"은 이 설정을 끈다. 꺼도 우클릭 SVN Apply Rename은 쓸 수 있다.\n\n**Rename notification.** Ask whether to apply explorer renames of versioned items as SVN renames (history kept). \"Don't Ask Again\" turns this off. SVN Apply Rename in the context menu still works."
+          },
+          "svnTools.history.autoRefresh": {
+            "type": "boolean",
+            "default": true,
+            "description": "SVN 이력 칸 자동 확인: 칸이 보이고 VS Code 창이 앞에 있을 때 서버의 새 커밋을 주기적으로 확인한다 / Check for new commits periodically while the SVN History view is visible and the window is focused"
+          },
+          "svnTools.history.autoRefreshMinutes": {
+            "type": "number",
+            "default": 5,
+            "minimum": 1,
+            "description": "SVN 이력 칸 자동 확인 간격(분). 자동 확인이 켜져 있을 때 쓴다 / Minutes between checks, when automatic check is on"
           },
           "svnTools.commit.review": {
             "type": "boolean",

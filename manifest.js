@@ -12,8 +12,10 @@ const pkg = {
   name: 'vscode-svn-tools',
   displayName: 'SVN Tools',
   description: 'SVN Source Control panel, explorer context menu (SVN / TortoiseSVN) and status decorations including ignored files.',
-  version: '0.11.0',
+  version: '1.0.0',
   publisher: 'khoon',
+  // 마켓플레이스는 SVG 아이콘을 받지 않아 256px PNG를 쓴다.
+  icon: 'images/icon.png',
   license: 'MIT',
   repository: { type: 'git', url: 'https://github.com/pugi-kh/vscode-svn-tools.git' },
   bugs: { url: 'https://github.com/pugi-kh/vscode-svn-tools/issues' },
@@ -70,6 +72,8 @@ const COMMANDS = [
   ['resolve', 'Resolve Conflict…', '충돌 해결…'],
   ['cleanup', 'Clean Up', '정리 (Cleanup)'],
   ['copyUrl', 'Copy SVN URL', 'SVN URL 복사'],
+  ['historyRefresh', 'Refresh History', '이력 새로고침', '$(refresh)'],
+  ['historyCopyMessage', 'Copy Commit Message', '커밋 메시지 복사', '$(copy)'],
 ];
 
 // TortoiseSVN 창으로 여는 명령. id는 src/tortoise.js의 COMMANDS 키와 같다. 영어 이름은 TortoiseSVN 메뉴와 맞춘다.
@@ -157,6 +161,7 @@ const STAGE_SUBMENU = [['stageInclude', '1@1'], ['stageExclude', '1@2']];
 const PALETTE = ['commitAll', 'update', 'refresh', 'stage', 'unstage', 'stageAll', 'unstageAll', 'diff', 'diffRevision', 'log', 'revert', 'editIgnores', 'editColors', 'cleanup'];
 
 const SCM = 'scmProvider == svnTools';
+const HISTORY = 'view == svnTools.history';
 // 영역 언어가 lang인가: 영역 설정이 lang이거나, default면서 전체 언어가 lang. area: 'menu' | 'scm'
 const langWhen = (lang, area = 'menu') => {
   const k = `config.svnTools.${area}Language`;
@@ -234,6 +239,15 @@ const menus = {
     ...scmItem('ignore', '3_edit@4', and(SCM, st('unversioned'))),
     ...scmItem('submenu:tortoise', '4_tortoise@1', SCM),
   ],
+  // SVN 이력 뷰(src/historyView.js). 패널 아래에 있어서 패널 언어를 따른다.
+  'view/title': [
+    ...scmItem('update', 'navigation@1', HISTORY),
+    ...scmItem('historyRefresh', 'navigation@2', HISTORY),
+  ],
+  'view/item/context': [
+    ...scmItem('historyCopyMessage', 'inline', and(HISTORY, 'viewItem == commit')),
+    ...scmItem('historyCopyMessage', '1_copy', and(HISTORY, 'viewItem == commit')),
+  ],
   // 팔레트에는 설정 언어 쪽의 PALETTE 명령과 TortoiseSVN 명령만 보인다. 나머지는 고른 항목이 있어야 뜻이 있다.
   commandPalette: commands.map((c) => {
     const [, id, lang] = /^svnTools\.(.+)\.(\w+)$/.exec(c.command);
@@ -308,6 +322,16 @@ const configuration = {
         + '**Rename notification.** Ask whether to apply explorer renames of versioned items as SVN renames (history kept). '
         + '"Don\'t Ask Again" turns this off. SVN Apply Rename in the context menu still works.',
     },
+    // 켜기와 간격을 따로 둔다 — "0이면 끔"은 설정 화면에서 알아보기 어렵다(사용자 의견)
+    'svnTools.history.autoRefresh': {
+      type: 'boolean', default: true,
+      description: 'SVN 이력 칸 자동 확인: 칸이 보이고 VS Code 창이 앞에 있을 때 서버의 새 커밋을 주기적으로 확인한다 / '
+        + 'Check for new commits periodically while the SVN History view is visible and the window is focused',
+    },
+    'svnTools.history.autoRefreshMinutes': {
+      type: 'number', default: 5, minimum: 1,
+      description: 'SVN 이력 칸 자동 확인 간격(분). 자동 확인이 켜져 있을 때 쓴다 / Minutes between checks, when automatic check is on',
+    },
     'svnTools.commit.review': {
       type: 'boolean', default: true,
       description: '커밋 확인 탭 사용: 커밋 직전에 메시지와 올라갈 항목을 한 번 더 보여 준다 / Use the commit review tab: show the message and items right before committing',
@@ -357,6 +381,8 @@ pkg.contributes = {
   colors,
   submenus: LANGUAGES.flatMap((lang) => SUBMENUS.map(([id, en, ko]) => ({ id: `svnTools.${id}.${lang}`, label: lang === 'ko' ? ko : en }))),
   menus,
+  // 제목은 historyView.js가 언어 설정에 맞춰 바꾼다(여기 이름은 처음 그릴 때만 보인다)
+  views: { scm: [{ id: 'svnTools.history', name: 'SVN History', when: 'svnTools.active' }] },
   configuration: [configuration, languageConfiguration],
 };
 

@@ -1,5 +1,12 @@
 # 변경 기록
 
+## 1.0.0 (2026-10-30)
+
+- 마켓플레이스 첫 게시.
+- SVN 이력 칸 추가(Source Control 아래). 현재 위치와 받지 않은 커밋 표시, 커밋을 펼쳐 바뀐 파일 보기, 파일을 눌러 그 커밋의 변경 비교.
+- 이력 자동 확인 설정 추가(`svnTools.history.autoRefresh`, `svnTools.history.autoRefreshMinutes`, 기본 5분).
+- 확장 아이콘 추가.
+
 ## 0.11.0 (2026-10-30)
 
 - 상태 색 편집 화면 추가(SVN: Edit Status Colors…). 탐색기 미리보기를 보며 상태별 색을 고르고, [기본값]으로 테마의 git 색으로 되돌림.
