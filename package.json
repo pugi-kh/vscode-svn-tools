@@ -2,7 +2,7 @@
   "name": "svn-tools",
   "displayName": "SVN Tools",
   "description": "SVN Source Control panel, explorer context menu (SVN / TortoiseSVN) and status decorations including ignored files.",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "publisher": "khoon",
   "icon": "images/icon.png",
   "license": "MIT",

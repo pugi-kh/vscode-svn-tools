@@ -12,7 +12,7 @@ const pkg = {
   name: 'svn-tools',
   displayName: 'SVN Tools',
   description: 'SVN Source Control panel, explorer context menu (SVN / TortoiseSVN) and status decorations including ignored files.',
-  version: '1.0.1',
+  version: '1.1.0',
   publisher: 'khoon',
   // 마켓플레이스는 SVG 아이콘을 받지 않아 256px PNG를 쓴다.
   icon: 'images/icon.png',

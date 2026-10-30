@@ -1,6 +1,6 @@
 # 변경 기록
 
-## 1.0.1 (2026-10-30)
+## 1.1.0 (2026-10-30)
 
 - svn 명령줄 도구가 없으면 알림으로 안내하고 winget으로 설치(TortoiseSVN에 명령줄 도구 추가, 또는 SlikSVN·TortoiseSVN 설치). 설치 후 다시 시작하지 않아도 바로 동작.
 - svn을 찾는 위치에 TortoiseSVN 설정 폴더, SlikSVN 기본 위치, 레지스트리의 최신 PATH 추가. 설정 svnTools.svnPath가 없는 경로면 자동으로 찾음. 쓰는 svn 경로를 출력 창에 표시.
