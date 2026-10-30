@@ -61,7 +61,7 @@ Module._load = function (req, ...rest) {
   if (req === 'vscode') return { workspace: { getConfiguration: () => ({ get: (_k, d) => d }) } };
   return origLoad.call(this, req, ...rest);
 };
-const VIEWS = [['commitView', 'CommitView'], ['ignoreView', 'IgnoreView'], ['reasonView', 'ReasonView']];
+const VIEWS = [['commitView', 'CommitView'], ['ignoreView', 'IgnoreView'], ['reasonView', 'ReasonView'], ['colorView', 'ColorView']];
 for (const [file, cls] of VIEWS) {
   const mod = require(path.join(root, 'src', file));
   const html = mod[cls].prototype.html ? mod[cls].prototype.html.call({}) : mod.html();

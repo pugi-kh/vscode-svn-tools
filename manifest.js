@@ -12,7 +12,7 @@ const pkg = {
   name: 'vscode-svn-tools',
   displayName: 'SVN Tools',
   description: 'SVN Source Control panel, explorer context menu (SVN / TortoiseSVN) and status decorations including ignored files.',
-  version: '0.10.1',
+  version: '0.11.0',
   publisher: 'khoon',
   license: 'MIT',
   repository: { type: 'git', url: 'https://github.com/pugi-kh/vscode-svn-tools.git' },
@@ -65,6 +65,7 @@ const COMMANDS = [
   ['applyRename', 'SVN Apply Rename', 'SVN 이름 바꾸기로 적용'],
   ['ignoreReason', 'Show Ignore Reason…', '무시된 원인 보기…'],
   ['editIgnores', 'Edit Ignore Lists…', '무시 목록 편집…', '$(eye-closed)'],
+  ['editColors', 'Edit Status Colors…', '상태 색 편집…', '$(symbol-color)'],
   ['log', 'Show Log', '로그 보기', '$(history)'],
   ['resolve', 'Resolve Conflict…', '충돌 해결…'],
   ['cleanup', 'Clean Up', '정리 (Cleanup)'],
@@ -153,7 +154,7 @@ const STAGE_SUBMENU = [['stageInclude', '1@1'], ['stageExclude', '1@2']];
 
 // 명령 팔레트에 보일 명령. 인자 없이 부르면 열린 편집기 파일(없으면 작업 폴더)이 대상이고,
 // Commit은 패널 Commit과 같이 스테이징된 것을 커밋한다(commands.js commitAll).
-const PALETTE = ['commitAll', 'update', 'refresh', 'stage', 'unstage', 'stageAll', 'unstageAll', 'diff', 'diffRevision', 'log', 'revert', 'editIgnores', 'cleanup'];
+const PALETTE = ['commitAll', 'update', 'refresh', 'stage', 'unstage', 'stageAll', 'unstageAll', 'diff', 'diffRevision', 'log', 'revert', 'editIgnores', 'editColors', 'cleanup'];
 
 const SCM = 'scmProvider == svnTools';
 // 영역 언어가 lang인가: 영역 설정이 lang이거나, default면서 전체 언어가 lang. area: 'menu' | 'scm'
@@ -321,8 +322,8 @@ const configuration = {
     },
     'svnTools.decorations.enabled': {
       type: 'boolean', default: true,
-      markdownDescription: '탐색기에 SVN 상태(배지·색, 무시된 파일 회색)를 표시한다. 무시 목록은 [무시 목록 편집 열기](command:svnTools.editIgnores)에서 고친다.\n\n'
-        + 'Show SVN status in the explorer (badges, colors, ignored files in grey). [Edit Ignore Lists](command:svnTools.editIgnores)',
+      markdownDescription: '탐색기에 SVN 상태(배지·색, 무시된 파일 회색)를 표시한다. 무시 목록은 [무시 목록 편집 열기](command:svnTools.editIgnores), 색은 [상태 색 편집 열기](command:svnTools.editColors)에서 고친다.\n\n'
+        + 'Show SVN status in the explorer (badges, colors, ignored files in grey). [Edit Ignore Lists](command:svnTools.editIgnores) · [Edit Status Colors](command:svnTools.editColors)',
     },
     'svnTools.svnPath': {
       type: 'string', default: '',
@@ -335,7 +336,7 @@ const configuration = {
   },
 };
 
-// 상태별 색. 사용자가 settings.json의 workbench.colorCustomizations로 git 색과 따로 바꿀 수 있다.
+// 상태별 색. 사용자가 settings.json의 workbench.colorCustomizations로 git 색과 따로 바꿀 수 있다(상태 색 편집 화면 src/colorView.js도 같은 곳에 쓴다).
 // 기본값은 git 색 ID를 가리켜 지금 테마의 git 표시와 같은 색이 된다.
 const COLORS = [
   ['modifiedForeground', 'gitDecoration.modifiedResourceForeground', '수정·교체된 파일 / Modified or replaced'],

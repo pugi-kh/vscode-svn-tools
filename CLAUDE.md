@@ -26,6 +26,7 @@ VS Code용 SVN 확장. Source Control 패널, 탐색기 우클릭(SVN / Tortoise
 | `src/ignore.js` | 무시 패턴 읽기·쓰기(폴더 속성, `%APPDATA%\Subversion\config`) |
 | `src/ignoreView.js` | 무시 목록 편집 화면(웹뷰, 저장 버튼 방식) |
 | `src/reasonView.js` | 무시된 원인 화면(웹뷰, 규칙 카드) |
+| `src/colorView.js` | 상태 색 편집 화면(웹뷰, 색 고르기 → `workbench.colorCustomizations`) |
 | `src/commitView.js` | 커밋 확인 탭(웹뷰, 메시지와 올라갈 항목) |
 | `src/tortoise.js` | TortoiseProc.exe 실행 |
 | `src/i18n.js` | 알림·확인 창·웹뷰 문구 한/영 (메뉴 이름은 manifest.js) |
@@ -58,7 +59,7 @@ for f in src/*.js; do node --check "$f"; done        # 문법만 빠르게 (git 
    `svn.js`의 `decode()`는 전체가 UTF-8이 아니면 **줄 단위로** UTF-8 → EUC-KR로 읽는다. 전체를 한 인코딩으로 바꾸지 말 것.
 4. **잠금 오류(E155004/E200033/E200030)는 몇 번 다시 시도한다.** TortoiseSVN 상태 캐시(TSVNCache)가 작업 사본 DB를
    잠깐 잡는다. 재시도 뒤에도 실패하면 진짜 잠금이고 Cleanup이 필요하다.
-5. **웹뷰 HTML·스크립트는 JS 템플릿 문자열 안에 있다**(`ignoreView.js`·`reasonView.js`의 `html()`). 스크립트 안에서 백슬래시는 두 번
+5. **웹뷰 HTML·스크립트는 JS 템플릿 문자열 안에 있다**(`ignoreView.js`·`reasonView.js`·`commitView.js`·`colorView.js`의 `html()`). 스크립트 안에서 백슬래시는 두 번
    (`\\s` → 화면에서 `\s`), `${`는 쓰지 않는다(바깥 템플릿이 먹는다). 고친 뒤에는 생성된 스크립트를 꺼내 `node --check`로 본다.
 6. **웹뷰에서 DOM `append`·`replaceChildren`·`prepend` 등에 `null`을 넘기면 글자 "null"이 찍힌다**(두 번 겪었다: 편집 화면의
    꼬리표, 원인 화면의 안내 자리). 조건부 요소는 `el()`(null을 거름)의 자식으로 넣거나, 배열로 모아 `.filter(Boolean)` 뒤 넘긴다.
@@ -210,7 +211,7 @@ for f in src/*.js; do node --check "$f"; done        # 문법만 빠르게 (git 
   이름은 범위를 고른 뒤에 정하고(svn:ignore면 그대로, 아니면 공백 → `?`), 직접 입력한 패턴은 global을 고르면 `?`로 바꿔 넣을지 묻는다.
   앞뒤 공백은 잘라서 저장한다(svn도 줄 앞뒤 공백을 무시한다). 와일드카드 안내 한 줄을 입력 근처에 둔다.
 - **설정 화면에는 버튼을 둘 수 없다**: 대신 설정 설명(`markdownDescription`)에 명령 링크(`command:svnTools.editIgnores`)를 둔다
-  (무시 목록 편집 열기, `svnTools.decorations.enabled` 설명).
+  (무시 목록 편집·상태 색 편집 열기, `svnTools.decorations.enabled` 설명).
 - **무시 목록 화면의 "다른 폴더에 규칙 추가"**: 폴더 칸은 작업 폴더 기준 경로다. 자동완성은 `<datalist>`(관리 중인 폴더 목록)이고,
   [폴더 선택…]은 VS Code 폴더 선택 창을 연다. **칸에 값을 미리 채우지 않는다** — 예전에 `.`을 채워 두었더니 브라우저가 자동완성을
   "`.`이 들어간 이름"으로 걸러서 목록이 비어 보였다(사용자 제보).
@@ -222,7 +223,11 @@ for f in src/*.js; do node --check "$f"; done        # 문법만 빠르게 (git 
   저장소가 여럿이면 고르게 한다(`pickRepo`).
 - **여러 개를 골라 SVN Ignore…**: 패턴(이름·확장자)은 항목마다 만들고, 폴더 속성은 각 항목의 상위 폴더별로 모아 건다.
 - **색상은 자기 색상 ID**(`svnTools.*Foreground`, 기본값은 git 색 ID): 사용자가 `workbench.colorCustomizations`로 git 색과 따로
-  바꿀 수 있게. 별도 색 설정 화면은 만들지 않는다.
+  바꿀 수 있게. 설정 화면에는 색 고르기 입력이 없어서 **상태 색 편집 화면**(`colorView.js`, 사용자 결정)을 둔다. 사용자(전역)
+  `workbench.colorCustomizations`에 쓰고, [기본값]은 키를 지운다(값을 git 색으로 박지 않는다 — 테마를 바꾸면 따라가게).
+  고르는 동안(`input`)은 미리보기만 바꾸고 고르기 창을 닫을 때(`change`) 저장한다. 미리보기와 hex는 웹뷰의 테마 변수
+  (`--vscode-svnTools-*`)에서 읽어 지금 실제로 적용된 색을 보인다. 작업 공간·테마별 값이 있으면 그쪽이 이겨서 경고만 띄운다.
+  `<input type="color">`는 투명도를 못 다뤄서 테마별 색·투명도는 settings.json 안내로 둔다.
 - **Lock/Unlock은 2순위**: 직접 구현하지 않고 TortoiseSVN 메뉴로 쓴다.
 
 ## 고칠 때 절차

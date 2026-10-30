@@ -11,6 +11,7 @@ const { t } = require('./i18n');
 const { baseUri, isInside, key, isPlainAdd, hitAncestor } = require('./repository');
 const { IgnoreView } = require('./ignoreView');
 const { ReasonView } = require('./reasonView');
+const { ColorView } = require('./colorView');
 const { CommitView } = require('./commitView');
 
 function createCommands(ctx) {
@@ -1118,6 +1119,9 @@ function createCommands(ctx) {
       const focusDir = target && repo.contains(target) ? (isDir(target) ? target : path.dirname(target)) : undefined;
       IgnoreView.show(repo, focusDir, () => ctx.refreshAll());
     }),
+
+    // 상태 색 편집 화면(colorView.js). 설정 화면에는 색 고르기 입력이 없다.
+    editColors: command(async () => ColorView.show()),
 
     log: command(async (...args) => {
       const list = toUris(args);

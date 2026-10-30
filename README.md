@@ -113,7 +113,7 @@ svn에는 스테이징이 없어서, 이 확장이 "다음 커밋에 넣을 항�
 | SVN ▸ Clean Up / Copy SVN URL | 항상 | 작업 사본 정리 / 저장소 주소 복사 |
 
 **명령 팔레트**(Ctrl+Shift+P)에는 "SVN"으로 시작하는 명령이 있습니다: Commit(스테이징된 것), Update, Stage / Unstage(열린 파일),
-Stage All / Unstage All, Compare, Show Log, Revert, Edit Ignore Lists…, Clean Up, TortoiseSVN 명령.
+Stage All / Unstage All, Compare, Show Log, Revert, Edit Ignore Lists…, Edit Status Colors…, Clean Up, TortoiseSVN 명령.
 
 ### 탐색기에서 이름을 바꿨을 때
 F2로 관리 중인 파일·폴더의 이름을 바꾸면 svn은 "원래 파일이 사라지고 새 파일이 생겼다"로만 압니다. 그대로 두면 이력이 끊깁니다.
@@ -181,7 +181,13 @@ Clean Up, Settings. 창을 닫으면 상태를 새로고침합니다.
 | `+` (배지 뒤) | 스테이징됨 |
 | 회색 | 무시됨(무시된 폴더 안의 파일 포함) |
 
-색은 지금 테마의 git 색을 따릅니다. 따로 바꾸려면 `settings.json`에 넣습니다.
+색은 지금 테마의 git 색을 따릅니다. 바꾸려면 명령 팔레트의 **SVN: Edit Status Colors…**(또는 설정 화면 "탐색기 표시"
+설명의 링크)를 엽니다. 상태마다 탐색기 한 줄 미리보기와 색 견본이 있고, 견본을 눌러 색을 고르면 바로 적용됩니다.
+[기본값]을 누르면 다시 테마의 git 색을 따릅니다.
+
+- 고른 색은 사용자 설정 `workbench.colorCustomizations`에 저장되며 모든 테마에 적용됩니다.
+- 테마마다 다른 색을 주거나 투명도를 넣으려면 `settings.json`에 직접 씁니다. 테마별 설정(`"[테마 이름]": {...}`)이나
+  작업 공간 설정에 같은 색이 있으면 그쪽이 우선합니다(화면에 경고로 표시).
 
 ```json
 "workbench.colorCustomizations": {

@@ -2,7 +2,7 @@
   "name": "vscode-svn-tools",
   "displayName": "SVN Tools",
   "description": "SVN Source Control panel, explorer context menu (SVN / TortoiseSVN) and status decorations including ignored files.",
-  "version": "0.10.1",
+  "version": "0.11.0",
   "publisher": "khoon",
   "license": "MIT",
   "repository": {
@@ -181,6 +181,12 @@
         "title": "Edit Ignore Lists…",
         "category": "SVN",
         "icon": "$(eye-closed)"
+      },
+      {
+        "command": "svnTools.editColors.en",
+        "title": "Edit Status Colors…",
+        "category": "SVN",
+        "icon": "$(symbol-color)"
       },
       {
         "command": "svnTools.log.en",
@@ -439,6 +445,12 @@
         "title": "무시 목록 편집…",
         "category": "SVN",
         "icon": "$(eye-closed)"
+      },
+      {
+        "command": "svnTools.editColors.ko",
+        "title": "상태 색 편집…",
+        "category": "SVN",
+        "icon": "$(symbol-color)"
       },
       {
         "command": "svnTools.log.ko",
@@ -1254,6 +1266,10 @@
           "when": "(config.svnTools.menuLanguage == 'en' || config.svnTools.menuLanguage == 'default' && config.svnTools.language == 'en') && svnTools.active"
         },
         {
+          "command": "svnTools.editColors.en",
+          "when": "(config.svnTools.menuLanguage == 'en' || config.svnTools.menuLanguage == 'default' && config.svnTools.language == 'en') && svnTools.active"
+        },
+        {
           "command": "svnTools.log.en",
           "when": "(config.svnTools.menuLanguage == 'en' || config.svnTools.menuLanguage == 'default' && config.svnTools.language == 'en') && svnTools.active"
         },
@@ -1451,6 +1467,10 @@
         },
         {
           "command": "svnTools.editIgnores.ko",
+          "when": "(config.svnTools.menuLanguage == 'ko' || config.svnTools.menuLanguage == 'default' && config.svnTools.language == 'ko') && svnTools.active"
+        },
+        {
+          "command": "svnTools.editColors.ko",
           "when": "(config.svnTools.menuLanguage == 'ko' || config.svnTools.menuLanguage == 'default' && config.svnTools.language == 'ko') && svnTools.active"
         },
         {
@@ -1929,7 +1949,7 @@
           "svnTools.decorations.enabled": {
             "type": "boolean",
             "default": true,
-            "markdownDescription": "탐색기에 SVN 상태(배지·색, 무시된 파일 회색)를 표시한다. 무시 목록은 [무시 목록 편집 열기](command:svnTools.editIgnores)에서 고친다.\n\nShow SVN status in the explorer (badges, colors, ignored files in grey). [Edit Ignore Lists](command:svnTools.editIgnores)"
+            "markdownDescription": "탐색기에 SVN 상태(배지·색, 무시된 파일 회색)를 표시한다. 무시 목록은 [무시 목록 편집 열기](command:svnTools.editIgnores), 색은 [상태 색 편집 열기](command:svnTools.editColors)에서 고친다.\n\nShow SVN status in the explorer (badges, colors, ignored files in grey). [Edit Ignore Lists](command:svnTools.editIgnores) · [Edit Status Colors](command:svnTools.editColors)"
           },
           "svnTools.svnPath": {
             "type": "string",
