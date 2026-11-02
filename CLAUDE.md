@@ -159,6 +159,12 @@ README는 확장 사용자용(마켓플레이스 Details 탭에 그대로 보인
 - **미등록 폴더 안의 파일도 U**: svn status는 미등록 폴더 안으로 들어가지 않아 폴더 한 줄만 준다. 탐색기 표시
   (`decorations.js`)에서만 `isUnversioned`로 상위를 따라 올라가 `?`로 본다. `statusOf`는 바꾸지 않는다 — `commands.js`가
   "미등록 폴더 안은 `undefined`"를 전제로 판정한다. Source Control 패널은 지금처럼 폴더 한 줄만 둔다.
+- **[함정] 폴더 안 상태 표시(`●`)는 확장이 직접 계산한다**(사용자 결정 2026-11-02, `Repository.insideSummary` → `decorations.js`).
+  VS Code의 `propagate`는 탐색기가 한 번 그린 파일만 상위로 올리는데, 우리는 새로고침마다 `fire(undefined)`로 캐시를 비워서
+  펼친 적 없는 접힌 폴더에는 점이 나오지 않았다(추정). 섞였을 때 어느 색이 이길지도 정할 수 없었다. 그래서 `propagate`는 쓰지 않고,
+  render 때 "폴더 → 하위 상태별 개수"를 만들어 둔다. 점 색 우선순위는 고정이다(충돌 > 덜 받음 > 삭제·누락 > 수정 > 추가 > 미등록,
+  `INSIDE_ORDER`, 사용자 결정). 무시된 항목은 세지 않는다. 폴더 자신의 상태가 있으면 그 배지가 우선이고 요약은 툴팁에만 붙는다.
+  배지와 이름 색은 API상 한 색이라 "점만 색칠"은 불가능하다(폴더 이름도 같은 색).
 - **Update가 끊긴 폴더(incomplete)는 `N`**: svn status의 `item="incomplete"`. 그 안의 누락(`!`)도 아직 못 받은 것일 수 있어
   `N`으로 묶고 스테이징·커밋에서 뺀다(커밋하면 삭제가 올라갈 수 있다). `wc-locked`면 Clean Up 후 Update를 안내한다.
 

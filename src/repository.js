@@ -78,6 +78,7 @@ class Repository {
     this.walkCache = new Map();  // 미등록 폴더 key → 그 안 항목의 VS Code 표기 목록(contextLists의 폴더 훑기 결과)
     this.lists = { addable: [], stageable: [], staged: [], renamable: [] };
     this.decoSig = '';
+    this.inside = new Map();     // 폴더 key → 하위 상태별 개수(insideSummary)
     this.memento = memento;
     this.stateKey = `svnTools.staged:${key(this.folder)}`;
     this.staged = new Map((memento.get(this.stateKey) || []).map((p) => [key(p), p]));  // key → path
@@ -335,6 +336,7 @@ class Repository {
       else changes.push(state(s, 'changed'));
     }
     this.decoSig = sig.join('\n') + '\n#' + [...this.ignoredKeys].join('\n');
+    this.inside = this.insideSummary();
     this.lists = this.contextLists();
     const byPath = (a, b) => a.resourceUri.fsPath.localeCompare(b.resourceUri.fsPath);
     this.stagedGroup.resourceStates = staged.sort(byPath);
@@ -343,6 +345,26 @@ class Repository {
     this.conflicts.resourceStates = conflicts.sort(byPath);
     this.sourceControl.count = staged.length + changes.length + conflicts.length;
     this.onDidChange(this);
+  }
+
+  // 폴더 key → { 상태 코드: 하위 항목 수 }. 탐색기에서 폴더가 접혀 있어도 안의 상태를 알 수 있게 한다(decorations.js).
+  // VS Code의 propagate는 탐색기가 한 번 그린 파일만 올려 줘서, 펼친 적 없는 폴더에는 표시가 나오지 않는다.
+  insideSummary() {
+    const out = new Map();
+    for (const s of this.statuses.values()) {
+      for (let cur = path.dirname(s.path); isInside(cur, this.folder); cur = path.dirname(cur)) {
+        const k = key(cur);
+        const counts = out.get(k) || {};
+        counts[s.code] = (counts[s.code] || 0) + 1;
+        out.set(k, counts);
+        if (k === this.folderKey || path.dirname(cur) === cur) break;
+      }
+    }
+    return out;
+  }
+
+  insideOf(p) {
+    return this.inside.get(key(this.toReal(p)));
   }
 
   // contextValue: staged | changed | unversioned | conflicted | incomplete (메뉴 조건 scmResourceState에 쓴다)
