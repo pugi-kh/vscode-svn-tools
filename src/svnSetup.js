@@ -25,9 +25,9 @@ const WINGET = {
 
 // 폴더나 그 상위에 .svn이 있는가. svn이 없어 svn info를 못 해도 작업 사본인지는 알 수 있다
 // (SVN과 상관없는 폴더를 열 때마다 설치 안내를 띄우지 않게).
-function looksLikeWorkingCopy(dir) {
+async function looksLikeWorkingCopy(dir) {
   for (let cur = dir; ;) {
-    if (fs.existsSync(path.join(cur, '.svn'))) return true;
+    if (await fs.promises.access(path.join(cur, '.svn')).then(() => true, () => false)) return true;
     const up = path.dirname(cur);
     if (up === cur) return false;
     cur = up;
@@ -67,10 +67,11 @@ class SvnSetup {
 
   // 작업 폴더를 열다가 svn이 없을 때. 한 세션에 한 번만 묻는다(닫았으면 명령 팔레트로 다시 할 수 있다).
   missing(dir) {
-    if (this.asked || !looksLikeWorkingCopy(dir)) return;
-    this.asked = true;
-    this.output.appendLine(`svn search: ${svn.searchReport()}`);
     (async () => {
+      // 확인하는 사이 다른 폴더가 먼저 물었을 수 있어 확인 뒤에 다시 본다
+      if (this.asked || !(await looksLikeWorkingCopy(dir)) || this.asked) return;
+      this.asked = true;
+      this.output.appendLine(`svn search: ${svn.searchReport()}`);
       const install = t('svnSetupInstall');
       const locate = t('svnSetupLocate');
       const guide = t('svnSetupGuide');
@@ -87,7 +88,7 @@ class SvnSetup {
       return;
     }
     svn.resetSvn();
-    const existing = svn.findSvn();
+    const existing = await svn.findSvn();
     if (existing) {
       vscode.window.showInformationMessage(t('svnSetupAlready', existing));
       return;
@@ -135,7 +136,7 @@ class SvnSetup {
   // 종료 코드와 상관없이 먼저 다시 찾는다. 못 찾았을 때만 원인을 안내한다.
   async afterInstall(code, kind) {
     if (await this.recheck()) {
-      const file = svn.findSvn();
+      const file = await svn.findSvn();
       vscode.window.showInformationMessage(t(kind === 'tortoise' ? 'svnSetupDoneTortoise' : 'svnSetupDone', file));
       return;
     }
@@ -169,7 +170,7 @@ class SvnSetup {
   // svn을 다시 찾고, 찾으면 작업 폴더를 연다. 반환: 찾았는가
   async recheck() {
     svn.resetSvn();
-    const file = svn.findSvn();
+    const file = await svn.findSvn();
     this.output.appendLine(`svn: ${file || 'not found'}`);
     if (!file) return false;
     this.asked = false;

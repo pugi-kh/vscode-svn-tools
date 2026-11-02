@@ -49,7 +49,7 @@ function activate(context) {
 
   // svn이 없을 때의 안내·설치(svnSetup.js). svn을 새로 찾으면 아직 못 연 작업 폴더를 다시 연다.
   const setup = new SvnSetup(output, () => Promise.all((vscode.workspace.workspaceFolders || []).map(openFolder)));
-  output.appendLine(`svn: ${svn.findSvn() || 'not found'}`);
+  svn.findSvn().then((f) => output.appendLine(`svn: ${f || 'not found'}`));
 
   // ---- 작업 사본 찾기: 작업 폴더마다 svn info가 되는지 본다 ----
   // 이미 열었거나 여는 중인 폴더는 건너뛴다. 시작·폴더 추가·svn 설치 후 다시 열기가 겹치면 같은 폴더의 패널이 두 개 생겼다(검토로 지적).

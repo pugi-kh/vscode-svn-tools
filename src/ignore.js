@@ -180,7 +180,7 @@ function readConfigFile(file) {
 function readRegistry(hive, key = REG_KEY) {
   if (process.platform !== 'win32') return undefined;
   try {
-    const buf = cp.execFileSync('reg', ['query', `${hive}\\${key}`, '/v', 'global-ignores'],
+    const buf = cp.execFileSync(svn.REG, ['query', `${hive}\\${key}`, '/v', 'global-ignores'],
       { windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] });
     return parseRegQuery(svn.decode(buf));
   } catch {
@@ -190,7 +190,7 @@ function readRegistry(hive, key = REG_KEY) {
 
 // 내 레지스트리(HKCU)에 쓴다. 값은 인자로 넘긴다(Node가 UTF-16으로 넘겨 한글도 그대로 들어간다).
 function writeRegistry(patterns, key = REG_KEY) {
-  cp.execFileSync('reg', ['add', `HKCU\\${key}`, '/v', 'global-ignores', '/t', 'REG_SZ', '/d', patterns.join(' '), '/f'],
+  cp.execFileSync(svn.REG, ['add', `HKCU\\${key}`, '/v', 'global-ignores', '/t', 'REG_SZ', '/d', patterns.join(' '), '/f'],
     { windowsHide: true, stdio: 'ignore' });
 }
 

@@ -81,27 +81,37 @@ let configuredMissing = '';  // 설정에 있지만 디스크에 없는 경로(�
 // PATH 항목 정리: 앞뒤 공백·따옴표, 복사해 붙일 때 딸려 오는 보이지 않는 방향 문자(실제 PC의 PATH에서 발견)
 const cleanDir = (d) => d.replace(/[‎‏‪-‮⁦-⁩]/g, '').trim().replace(/^"|"$/g, '');
 
-function inDirs(dirs) {
-  for (const d of dirs.map(cleanDir)) {
-    const f = d && path.join(d, EXE);
-    if (f && fs.existsSync(f)) return f;
-  }
+const exists = (f) => fs.promises.access(f).then(() => true, () => false);
+
+// 차례로 하나씩 본다. 끊긴 네트워크 경로는 하나에 수십 초 걸릴 수 있어서, 한꺼번에 보면 다른 확장도 함께 쓰는
+// Node 파일 작업 스레드(기본 4개)를 모두 붙잡는다.
+async function firstExisting(files) {
+  for (const f of files) if (f && await exists(f)) return f;
   return undefined;
 }
 
-function registryPathDirs() {
+function inDirs(dirs) {
+  return firstExisting(dirs.map(cleanDir).map((d) => d && path.join(d, EXE)));
+}
+
+// reg도 전체 경로로 실행한다(이름만 주면 PATH를 동기로 뒤진다 — exec의 주석 참고)
+const REG = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'reg.exe');
+
+function regQuery(k) {
+  return new Promise((resolve) => {
+    cp.execFile(REG,['query', k, '/v', 'Path'], { encoding: 'buffer', windowsHide: true, timeout: 5000 },
+      (err, stdout) => resolve(err ? '' : decode(stdout)));
+  });
+}
+
+async function registryPathDirs() {
   if (process.platform !== 'win32') return [];
   const keys = ['HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment', 'HKCU\\Environment'];
   const dirs = [];
   for (const k of keys) {
-    try {
-      // reg는 콘솔 코드 페이지(CP949)로 출력한다 — 한글 경로가 깨지지 않게 decode()로 읽는다
-      const out = decode(cp.execFileSync('reg', ['query', k, '/v', 'Path'], { windowsHide: true, timeout: 5000 }));
-      const m = /Path\s+REG_(?:EXPAND_)?SZ\s+(.*)/i.exec(out);
-      if (m) dirs.push(...m[1].trim().replace(/%([^%]+)%/g, (all, v) => process.env[v] || all).split(';'));
-    } catch {
-      // 값이 없는 키
-    }
+    // reg는 콘솔 코드 페이지(CP949)로 출력한다 — 한글 경로가 깨지지 않게 decode()로 읽는다
+    const m = /Path\s+REG_(?:EXPAND_)?SZ\s+(.*)/i.exec(await regQuery(k));
+    if (m) dirs.push(...m[1].trim().replace(/%([^%]+)%/g, (all, v) => process.env[v] || all).split(';'));
   }
   return dirs;
 }
@@ -111,15 +121,31 @@ function knownFiles() {
   return [...new Set([...(proc ? [path.join(path.dirname(proc), EXE)] : []), ...KNOWN_SVN])];
 }
 
-function findSvn() {
+// 비동기로 찾는다(1.2.0). 동기로 찾던 때는 PATH에 끊긴 네트워크 경로가 있으면 확장 호스트가 그동안 멈춰,
+// 같은 호스트를 쓰는 다른 확장까지 늦어질 수 있었다(Codex 화면이 30초 안에 뜨지 않는다는 제보로 점검).
+let finding;  // 찾는 중인 Promise. 동시에 부르면 같은 결과를 기다린다.
+async function findSvn() {
   const configured = vscode.workspace.getConfiguration('svnTools').get('svnPath', '');
-  configuredMissing = configured && path.isAbsolute(configured) && !fs.existsSync(configured) ? configured : '';
+  configuredMissing = configured && path.isAbsolute(configured) && !(await exists(configured)) ? configured : '';
   if (configured && !configuredMissing) return configured;
-  if (found === undefined) {
-    found = inDirs((process.env.PATH || '').split(path.delimiter)) || knownFiles().find((f) => fs.existsSync(f))
-      || inDirs(registryPathDirs()) || null;
+  if (found !== undefined) return found;
+  if (!finding) {
+    const pending = searchSvn().then((f) => {
+      // 찾는 사이 resetSvn이 불렸으면 이 결과는 기억하지 않는다
+      if (finding === pending) {
+        found = f;
+        finding = undefined;
+      }
+      return f;
+    });
+    finding = pending;
   }
-  return found;
+  return finding;
+}
+
+async function searchSvn() {
+  return (await inDirs((process.env.PATH || '').split(path.delimiter)))
+    || (await firstExisting(knownFiles())) || (await inDirs(await registryPathDirs())) || null;
 }
 
 // 못 찾았을 때 출력 창에 남길 설명: 어디를 찾아봤는지
@@ -133,6 +159,7 @@ function searchReport() {
 // 설치 직후나 설정을 바꾼 뒤 다시 찾게 한다
 function resetSvn() {
   found = undefined;
+  finding = undefined;
 }
 
 // 실행 실패(ENOENT) 때의 다시 찾기는 10초에 한 번까지 — svn이 없으면 명령마다 레지스트리를 동기로 읽어 확장이 멈칫했다.
@@ -144,9 +171,7 @@ function rescanAfterFailure() {
   resetSvn();
 }
 
-function svnPath() {
-  return findSvn() || 'svn';
-}
+const enoent = () => Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
 
 function run(file, args, cwd) {
   return new Promise((resolve, reject) => {
@@ -155,7 +180,7 @@ function run(file, args, cwd) {
         const out = decode(stdout);
         const errText = decode(stderr).trim();
         if (err) {
-          if (err.code === 'ENOENT') return reject(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }));
+          if (err.code === 'ENOENT') return reject(enoent());
           return reject(new SvnError(errText || err.message, errText, err.code, out));
         }
         resolve({ stdout: out, stderr: errText });
@@ -177,18 +202,21 @@ async function exec(args, cwd) {
   if (length > MAX_COMMAND_LINE) {
     throw Object.assign(new Error('TOOLONG'), { code: 'TOOLONG', count: args.length });
   }
-  let file = svnPath();
+  let file = await findSvn();
   let rescanned = false;
   for (let attempt = 0; ; attempt++) {
     try {
+      // 못 찾았으면 이름('svn')만으로 실행하지 않는다. 윈도우에서 Node(libuv)는 실행 파일을 PATH에서 찾는 일을
+      // 메인 스레드에서 동기로 해서, PATH에 끊긴 네트워크 경로가 있으면 확장 호스트가 수십 초 멈춘다(테스트로 26초 확인).
+      if (!file) throw enoent();
       return await run(file, full, cwd);
     } catch (e) {
       // 기억해 둔 svn이 지워졌을 수 있다 — 한 번만 다시 찾아본다. 잠금 재시도 횟수(attempt)는 쓰지 않는다.
       if (e.code === 'ENOENT' && !rescanned) {
         rescanned = true;
         rescanAfterFailure();
-        const again = svnPath();
-        if (again !== file) {
+        const again = await findSvn();
+        if (again && again !== file) {
           file = again;
           attempt--;
           continue;
@@ -334,8 +362,9 @@ function lastRevision(text) {
 // 커밋은 올린 파일만 새 리비전으로 바꾸고 상위 폴더는 그대로 둬서, 폴더의 svn info 리비전만 보면 내가 올린 커밋도
 // "받지 않음"으로 보인다(이력 뷰에서 실제로 겪음). svnversion은 svn.exe 옆에 있다.
 async function wcVersion(dir) {
-  const svnFile = svnPath();
-  const file = svnFile === 'svn' ? 'svnversion' : path.join(path.dirname(svnFile), 'svnversion.exe');
+  const svnFile = await findSvn();
+  if (!svnFile) return undefined;
+  const file = path.isAbsolute(svnFile) ? path.join(path.dirname(svnFile), 'svnversion.exe') : 'svnversion';
   try {
     const { stdout } = await run(file, [dir], dir);
     const m = /^(\d+)(?::(\d+))?/.exec(stdout.trim());
@@ -347,5 +376,5 @@ async function wcVersion(dir) {
 
 module.exports = {
   exec, realPath, decode, parseStatus, parseInfo, parseInfoPaths, parseLog, parsePropget, parseInheritedProps, lastRevision, SvnError,
-  wcVersion, findSvn, resetSvn, searchReport,
+  wcVersion, findSvn, resetSvn, searchReport, REG,
 };
