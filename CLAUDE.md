@@ -15,7 +15,8 @@ VS Code용 SVN 확장. Source Control 패널, 탐색기 우클릭(SVN / Tortoise
 | `src/svnSetup.js` | svn 찾기와 설치 |
 | `src/extension.js` | 상태 읽기와 새로고침 · svn 찾기와 설치 · 언어와 매니페스트 |
 | `src/repository.js` | 상태 읽기와 새로고침 · 스테이징과 커밋 |
-| `src/commands.js` | 스테이징과 커밋 · 탐색기 메뉴와 이름 바꾸기 · svn 실행과 인코딩 |
+| `src/commands.js` | 스테이징과 커밋 · 탐색기 메뉴와 이름 바꾸기 · svn 실행과 인코딩 · 충돌 해결 |
+| `src/conflict.js` | 충돌 해결 · svn 실행과 인코딩 |
 | `src/commitView.js` | 스테이징과 커밋 · 웹뷰 공통 |
 | `src/decorations.js` | 상태 읽기와 새로고침 · 색상 |
 | `src/colorView.js` | 색상 · 웹뷰 공통 |
@@ -51,11 +52,12 @@ VS Code용 SVN 확장. Source Control 패널, 탐색기 우클릭(SVN / Tortoise
 | `src/colorView.js` | 상태 색 편집 화면(웹뷰, 색 고르기 → `workbench.colorCustomizations`) |
 | `src/commitView.js` | 커밋 확인 탭(웹뷰, 메시지와 올라갈 항목) |
 | `src/historyView.js` | SVN 이력 칸(Source Control 아래 트리 뷰, 커밋 목록·바뀐 파일·비교) |
+| `src/conflict.js` | 충돌 정보 읽기, "로컬 미등록 + 서버 추가" 충돌 처리, 병합 편집기 좌우 정하기 (vscode 없이 동작 — 테스트에서 직접 부른다) |
 | `src/tortoise.js` | TortoiseProc.exe 실행 |
 | `src/i18n.js` | 알림·확인 창·웹뷰 문구 한/영 (메뉴 이름은 manifest.js) |
 | `src/languages.js` | 메뉴 언어 목록(`en`, `ko`) |
 | `images/icon.png` | 확장 아이콘(256px PNG, 마켓플레이스는 SVG를 받지 않는다) |
-| `test/svn-paths.js` | 한글·공백 경로 회귀 검사 |
+| `test/svn-paths.js` | 한글·공백 경로 회귀 검사 + 충돌 처리(두 번째 작업 사본으로 서버 변경을 만든다) |
 | `test/manifest-check.js` | 메뉴 구조 일관성 검사(명령·하위 메뉴·처리 함수·언어 섞임) + 코드에서 쓰는 메시지 키가 한/영 모두 있는지 + 웹뷰 스크립트(문법, null을 DOM에 넘기는지) |
 
 외부 패키지가 없다(Node 기본 모듈만). 빌드 단계도 없다 — `manifest.js`가 package.json만 만든다.
@@ -283,6 +285,24 @@ README는 확장 사용자용(마켓플레이스 Details 탭에 그대로 보인
     카드에만 삭제 버튼이 있다. 작업 사본보다 위에 걸린 상속 값은 path가 URL로 와서 설명만 보여 준다.
   - "같은 패턴에 걸린 다른 항목"은 삭제를 누른 뒤 확인 창에서만 보여 준다. 현재 status의 무시 목록 중 규칙이 미치는 범위만 본다
     (무시된 폴더 안쪽은 svn이 알려 주지 않으므로 빠질 수 있다).
+
+### 충돌 해결
+`commands.js resolve` → `conflict.js`. 사용자 요청(2026-11-05): VS Code 자체 충돌 편집기로 열기 + 아래 트리 충돌 처리.
+- **[함정] "로컬 미등록 파일 + 서버에서 추가"(update·switch) 트리 충돌은 update 직후 이미 삭제 예약(`D C`)이다.**
+  `--accept working`(TortoiseSVN "Mark as resolved")으로 해결하면 `D`가 남아, 커밋하면 서버 파일이 지워진다(svn 1.14.5로 재현).
+  그래서 `conflict.isLocalAdd`면 전용 선택지를 띄운다. 섞여 고르면 기존 목록의 "지금 파일 그대로"에 경고를 붙인다.
+  - 내 파일 유지(`keepLocal`): 내용을 메모리에 읽어 두고 → resolve working → revert(서버 파일이 BASE로 되살아나며 작업 파일을 덮음) → 다시 쓴다.
+    결과는 서버 기준 수정(M)이라 BASE 비교 화면에서 바로 고칠 수 있다.
+  - 서버 파일로(`takeIncoming`): resolve working → 내 파일을 휴지통으로 → revert.
+- **[함정] TortoiseSVN "Merge the files"로 바꾼 텍스트 충돌은 좌우가 반대다.** svn이 서버 파일 위에 로컬 파일을 병합해서
+  `prev-wc-file`(마커 `.working`)이 서버, `cur-base-file`(`.new`)이 내 파일이고, 리비전 정보가 없고 base는 빈 파일이다(svn 1.14.5 대화형으로 확인).
+  `theirs-full`이 내 파일을 남긴다. `conflict.mergeSides`는 "operation=merge + 리비전 없음"이면 좌우를 바꿔 병합 편집기에 넣는다.
+  이때 svn은 `파일.tmp`·`파일.2.tmp`를 남겨서 `repository.js LEFTOVER`에 넣었다.
+- **VS Code 병합 편집기는 내부 명령 `_open.mergeEditor`로 연다**(git 확장과 같은 인자 `{ base, input1, input2, output }`). 공개 API가 없어
+  실패하면 마커가 든 파일을 연다(VS Code가 충돌 CodeLens를 띄운다). 편집기의 [병합 완료] 버튼은 제안 API(`merge/toolbar`)라 못 붙여서,
+  알림의 [해결됨으로 표시]로 resolve하고, 저장 안 했으면 저장, 충돌 표시가 남았으면 한 번 더 묻는다.
+- **[함정] `svn info --xml`의 entry path는 절대 경로로 물어도 실행 폴더 기준 상대 경로로 올 수 있다**(테스트로 확인). `parseConflicts(xml, cwd)`가 cwd로 맞춘다.
+- svn 명령줄의 대화형 해결(`svn resolve` 메뉴)은 윈도우에서 콘솔을 직접 읽어 파이프 입력이 먹지 않는다. 확인할 때는 pty(예: pywinpty)로 돌린다.
 
 ### SVN 이력 칸
 `historyView.js`. 사용자 요청 — git 그래프 자리처럼 이력을 보고 싶다.

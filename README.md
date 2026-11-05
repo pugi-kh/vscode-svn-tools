@@ -127,9 +127,20 @@ Source Control 화면 아래의 **SVN 이력** 칸에 최근 커밋 50개가 나
 | SVN ▸ Delete ▸ Keep Local File / Delete Local File Too | 항상 | SVN에서 빼기(파일은 남김 / 파일도 삭제) |
 | SVN ▸ Rename (keep history) | 항상 | `svn move`로 이름 바꾸기(이력 유지) |
 | SVN ▸ Revert | 항상 | 변경 되돌리기(복구 불가, 확인 후) |
-| SVN ▸ Resolve Conflict… | 항상 | 지금 파일 그대로 / 내 것 / 서버 것 / 충돌 부분만 / TortoiseSVN 충돌 편집기 |
+| SVN ▸ Resolve Conflict… | 항상 | VS Code 병합 편집기 / 지금 파일 그대로 / 내 것 / 서버 것 / 충돌 부분만 / TortoiseSVN 충돌 편집기(아래 [충돌 해결](#충돌-해결)) |
 | SVN ▸ Show Ignore Reason… / Edit Ignore Lists… | 항상 | 무시된 원인 보기 / 무시 목록 편집 화면 |
 | SVN ▸ Clean Up / Copy SVN URL | 항상 | 작업 사본 정리 / 저장소 주소 복사 |
+
+### 충돌 해결
+**Resolve Conflict…**(패널의 충돌 항목, 탐색기 SVN ▸)에서 고릅니다.
+
+- **VS Code 병합 편집기**: 텍스트 충돌 파일 하나를 골랐을 때 맨 위에 나옵니다. 내 변경 · 서버 변경 · 결과를 나란히 보고 고칩니다.
+  저장한 뒤 알림의 **[해결됨으로 표시]**를 누르면 해결됩니다(충돌 표시가 남아 있으면 한 번 더 묻습니다).
+  VS Code 내부 명령을 쓰기 때문에 열지 못하는 버전에서는 파일을 열고, 충돌 표시 위의 버튼으로 고르게 안내합니다.
+- **로컬 미등록 파일 + 서버에서 같은 이름 추가**(예: 직접 만든 `package-lock.json`을 다른 사람이 먼저 올림): update 뒤
+  이 항목은 이미 **삭제 예약** 상태라, "지금 파일 그대로"로 해결하고 커밋하면 서버 파일이 지워집니다. 그래서 따로 고르게 합니다.
+  - **서버 파일 받고 내 파일은 변경으로 남기기**: 서버 파일이 기준이 되고 내 내용은 수정(M)으로 남아 비교 화면이 열립니다.
+  - **서버 파일로 바꾸기**: 내 파일은 휴지통으로 옮깁니다.
 
 **명령 팔레트**(Ctrl+Shift+P)에는 "SVN"으로 시작하는 명령이 있습니다: Commit(스테이징된 것), Update, Stage / Unstage(열린 파일),
 Stage All / Unstage All, Compare, Show Log, Revert, Edit Ignore Lists…, Edit Status Colors…, Clean Up, TortoiseSVN 명령.

@@ -58,7 +58,8 @@ const isConflict = (code) => code === 'C' || code === '~';
 const isPlainAdd = (s) => s.code === 'A' && !s.copied;
 
 // 충돌 때 svn이 만드는 부산물(파일.mine, 파일.r12 등). 미등록으로 보이지만 추가하면 안 된다.
-const LEFTOVER = /\.(mine|working|r\d+|merge-(left|right)\.r\d+)$/;
+// 파일.tmp·파일.2.tmp는 트리 충돌을 "Merge the files"로 텍스트 충돌로 바꿨을 때 생긴다.
+const LEFTOVER = /\.(mine|working|r\d+|merge-(left|right)\.r\d+|(\d+\.)?tmp)$/;
 
 class Repository {
   constructor(folder, info, memento, onDidChange) {

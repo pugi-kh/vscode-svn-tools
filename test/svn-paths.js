@@ -19,6 +19,7 @@ const path = require('path');
 const cp = require('child_process');
 const svn = require('../src/svn');
 const ignore = require('../src/ignore');
+const conflict = require('../src/conflict');
 const { applyChange } = require('../src/ignoreView');
 
 const SVNADMIN = ['svnadmin', 'C:\\Program Files\\TortoiseSVN\\bin\\svnadmin.exe'];
@@ -262,6 +263,64 @@ function createRepo() {
       return /E155038/.test(e.stderr) ? 'E155038' : (e.stderr || e.message).split(/\r?\n/)[0];
     }
   }, 'E155038');
+  // 충돌(1.3.0): 두 번째 작업 사본으로 서버 변경을 만든다(conflict.js).
+  const wc2 = path.join(base, '둘째 사본');
+  const cf = path.join(wc, '충돌 검사');
+  const cf2 = path.join(wc2, '충돌 검사');
+  await svn.exec(['checkout', 'file:///' + repoDir.replace(/\\/g, '/'), wc2], base);
+  fs.mkdirSync(cf);
+  fs.writeFileSync(path.join(cf, '줄.txt'), '1\n2\n3\n');
+  await svn.exec(['add', cf], wc);
+  await svn.exec(['commit', '-m', '충돌 검사 준비', '--force-log', cf], wc);
+  await svn.exec(['update', wc2], wc2);
+  // 로컬 미등록 파일 + 서버에서 같은 이름 추가 → update 후 삭제 예약(D) + 트리 충돌
+  const keepF = path.join(cf, '유지 파일.json');
+  const takeF = path.join(cf, '받을 파일.json');
+  fs.writeFileSync(keepF, '서버\n');
+  fs.writeFileSync(takeF, '서버\n');
+  await svn.exec(['add', keepF, takeF], wc);
+  await svn.exec(['commit', '-m', '서버 추가', '--force-log', cf], wc);
+  const keepL = path.join(cf2, '유지 파일.json');
+  const takeL = path.join(cf2, '받을 파일.json');
+  fs.writeFileSync(keepL, '로컬\n');
+  fs.writeFileSync(takeL, '로컬\n');
+  await svn.exec(['update', cf2], wc2);
+  await check('로컬 미등록 + 서버 추가 → 삭제 예약 + isLocalAdd', async () => {
+    const [d] = await conflict.read([keepL], wc2);
+    const st = svn.parseStatus((await svn.exec(['status', '--xml', keepL], wc2)).stdout)[0];
+    return `${st.item}:${st.treeConflict}:${conflict.isLocalAdd(d)}`;
+  }, 'deleted:true:true');
+  await check('keepLocal → 수정(M), BASE는 서버', async () => {
+    await conflict.keepLocal(keepL, wc2);
+    const st = svn.parseStatus((await svn.exec(['status', '--xml', keepL], wc2)).stdout)[0];
+    const baseText = (await svn.exec(['cat', '-r', 'BASE', keepL], wc2)).stdout;
+    return `${st.item}:${st.treeConflict}:${baseText.trim()}:${fs.readFileSync(keepL, 'utf8').trim()}`;
+  }, 'modified:false:서버:로컬');
+  await check('takeIncoming → 서버 파일, 변경 없음', async () => {
+    await conflict.takeIncoming(takeL, wc2, (f) => fs.rmSync(f));
+    const st = svn.parseStatus((await svn.exec(['status', '--xml', takeL], wc2)).stdout);
+    return `${st.length}:${fs.readFileSync(takeL, 'utf8').trim()}`;
+  }, '0:서버');
+  // 일반 텍스트 충돌: prev-base = .r(이전), prev-wc = .mine, cur-base = .r(새)
+  await check('텍스트 충돌 파일 해석', async () => {
+    const line = path.join(cf, '줄.txt');
+    const line2 = path.join(cf2, '줄.txt');
+    fs.writeFileSync(line, '1\n서버\n3\n');
+    await svn.exec(['commit', '-m', '서버 수정', '--force-log', line], wc);
+    fs.writeFileSync(line2, '1\n내 것\n3\n');
+    await svn.exec(['update', cf2], wc2);
+    const [d] = await conflict.read([line2], wc2);
+    const s = conflict.mergeSides(d.text);
+    const n = (p) => path.basename(p).replace('줄.txt', '');
+    const old = `.r${Number(d.text.rightRev) - 1}`;
+    return `${n(s.base) === old},${n(s.mine)},${n(s.theirs) === `.r${d.text.rightRev}`}:${s.swapped}:${conflict.hasMarkers(fs.readFileSync(line2, 'utf8'))}`;
+  }, 'true,.mine,true:false:true');
+  // TortoiseSVN "Merge the files"로 바뀐 텍스트 충돌은 리비전 정보가 없고 prev-wc가 서버다(svn 1.14.5 대화형으로 확인).
+  await check('Merge the files 충돌은 좌우를 바꿈', () => {
+    const s = conflict.mergeSides({ operation: 'merge', base: 'a.tmp', mine: 'a.3.tmp', theirs: 'a.2.tmp' });
+    return `${s.mine},${s.theirs}:${s.swapped}`;
+  }, 'a.2.tmp,a.3.tmp:true');
+  await check('충돌 표시 판정', () => [conflict.hasMarkers('a\r\n=======\r\nb'), conflict.hasMarkers('a ======= b\n<<<<<<<x')].join(','), 'true,false');
   await check('applyChange 병합', () => JSON.stringify(applyChange(['a', 'b', 'c', 'ext'], { edits: [{ old: 'b', new: 'B' }], removed: ['c'], added: ['d', 'a'] })), '["a","B","ext","d"]');
 
   fs.rmSync(path.dirname(base), { recursive: true, force: true });

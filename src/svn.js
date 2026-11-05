@@ -294,6 +294,46 @@ function parseInfo(xml) {
   };
 }
 
+// svn info --xml 결과의 충돌 정보 → [{ path, text, tree }] (없는 쪽은 undefined)
+//   text: { operation, base, mine, theirs, leftRev, rightRev } — 충돌 파일 경로(.rN / .mine 등)
+//   tree: { operation, reason, action, kind }
+// 절대 경로로 물어도 entry path가 실행 폴더 기준 상대 경로로 올 수 있어 cwd로 맞춘다(테스트로 확인).
+function parseConflicts(xml, cwd) {
+  const out = [];
+  const re = /<entry\b([^>]*)>([\s\S]*?)<\/entry>/g;
+  let m;
+  while ((m = re.exec(xml)) !== null) {
+    const p = path.resolve(cwd, path.normalize(attr(m[1], 'path') || ''));
+    const body = m[2];
+    const file = (s, name) => {
+      const v = element(s, name);
+      return v ? path.resolve(cwd, path.normalize(v)) : undefined;
+    };
+    let text;
+    for (const c of body.matchAll(/<conflict\b([^>]*)>([\s\S]*?)<\/conflict>/g)) {
+      if (attr(c[1], 'type') !== 'text') continue;
+      const rev = (side) => {
+        const v = new RegExp(`<version\\b[^>]*\\sside="${side}"[^>]*>`).exec(c[2]);
+        return v ? attr(v[0], 'revision') : undefined;
+      };
+      text = {
+        operation: attr(c[1], 'operation'),
+        base: file(c[2], 'prev-base-file'),
+        mine: file(c[2], 'prev-wc-file'),
+        theirs: file(c[2], 'cur-base-file'),
+        leftRev: rev('source-left'),
+        rightRev: rev('source-right'),
+      };
+    }
+    const tc = /<tree-conflict\b[^>]*>/.exec(body);
+    const tree = tc ? {
+      operation: attr(tc[0], 'operation'), reason: attr(tc[0], 'reason'), action: attr(tc[0], 'action'), kind: attr(tc[0], 'kind'),
+    } : undefined;
+    out.push({ path: p, text, tree });
+  }
+  return out;
+}
+
 // 반환: [{ revision, author, date, message, paths: [{ action, kind, path }] }]
 function parseLog(xml) {
   const out = [];
@@ -375,6 +415,6 @@ async function wcVersion(dir) {
 }
 
 module.exports = {
-  exec, realPath, decode, parseStatus, parseInfo, parseInfoPaths, parseLog, parsePropget, parseInheritedProps, lastRevision, SvnError,
+  exec, realPath, decode, parseStatus, parseInfo, parseInfoPaths, parseConflicts, parseLog, parsePropget, parseInheritedProps, lastRevision, SvnError,
   wcVersion, findSvn, resetSvn, searchReport, REG,
 };

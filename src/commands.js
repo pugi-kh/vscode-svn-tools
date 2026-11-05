@@ -7,6 +7,7 @@ const path = require('path');
 const svn = require('./svn');
 const ignore = require('./ignore');
 const tortoise = require('./tortoise');
+const conflict = require('./conflict');
 const { t } = require('./i18n');
 const { baseUri, isInside, key, isPlainAdd, hitAncestor } = require('./repository');
 const { IgnoreView } = require('./ignoreView');
@@ -627,6 +628,72 @@ function createCommands(ctx) {
     return vscode.window.showTextDocument(uri, { preview: true });
   }
 
+  // ---- 충돌 ----
+
+  // VS Code 병합 편집기(3-way). 공개 API가 없어 git 확장과 같은 내부 명령을 쓴다 — 없어지면 마커가 든 파일을 연다.
+  async function openMergeEditor(file, text, repo) {
+    const sides = conflict.mergeSides(text);
+    const name = path.basename(file);
+    const input = (p, title, detail) => ({ uri: vscode.Uri.file(p), title, description: path.basename(p), detail });
+    const rev = (r) => (r ? `r${r}` : undefined);
+    try {
+      await vscode.commands.executeCommand('_open.mergeEditor', {
+        base: vscode.Uri.file(sides.base),
+        input1: input(sides.mine, t('mergeMine'), sides.swapped ? undefined : t('mergeWorkingCopy')),
+        input2: input(sides.theirs, t('mergeTheirs'), sides.swapped ? undefined : rev(text.rightRev)),
+        output: vscode.Uri.file(file),
+      });
+    } catch (e) {
+      ctx.output.appendLine(`_open.mergeEditor: ${e && e.message}`);
+      await vscode.window.showTextDocument(vscode.Uri.file(file));
+      vscode.window.showWarningMessage(t('mergeEditorFailed'));
+      return;
+    }
+    // 병합 편집기의 [병합 완료] 버튼은 git만 붙일 수 있다(제안 API). 해결 표시는 이 알림 버튼으로 한다.
+    const done = t('mergeMarkResolved');
+    for (;;) {
+      if (await vscode.window.showInformationMessage(t('mergeEditorOpened', name), done) !== done) return;
+      const doc = vscode.workspace.textDocuments.find((d) => d.uri.scheme === 'file' && key(d.uri.fsPath) === key(file));
+      if (doc && doc.isDirty) await doc.save();
+      if (!conflict.hasMarkers(fs.readFileSync(file, 'utf8'))
+        || await confirm(t('mergeMarkersLeft', name), t('mergeResolveAnyway'))) break;
+    }
+    await step('resolve', () => svn.exec(['resolve', '--accept', 'working', file], repo.folder));
+    vscode.window.showInformationMessage(t('resolveDone'));
+  }
+
+  // 로컬 미등록 파일 + 서버에서 추가된 같은 이름 파일(conflict.isLocalAdd)
+  async function resolveLocalAdd(files, repo) {
+    const name = files.length === 1 ? path.basename(files[0]) : t('itemsCount', files.length);
+    const pick = await vscode.window.showQuickPick([
+      { label: t('localAddKeep'), detail: t('localAddKeepDetail'), keep: true },
+      { label: t('localAddTake'), detail: t('localAddTakeDetail'), take: true },
+      { label: t('resolveTortoise'), tortoise: true },
+    ], { title: t('localAddTitle', name) });
+    if (!pick) return;
+    if (pick.tortoise) {
+      tortoise.open('conflicteditor', files, () => ctx.refreshAll());
+      return;
+    }
+    if (pick.keep) {
+      await step('resolve', async () => {
+        for (const f of files) await conflict.keepLocal(f, repo.folder);
+      });
+      if (files.length === 1) {
+        await vscode.commands.executeCommand('vscode.diff', baseUri(files[0], 'BASE'), vscode.Uri.file(files[0]),
+          t('diffBase', path.basename(files[0])));
+      }
+      vscode.window.showInformationMessage(t('localAddKept'));
+      return;
+    }
+    if (!await confirm(t('localAddTakeAsk', name), t('localAddTakeYes'))) return;
+    const trash = (f) => vscode.workspace.fs.delete(vscode.Uri.file(f), { useTrash: true });
+    await step('resolve', async () => {
+      for (const f of files) await conflict.takeIncoming(f, repo.folder, trash);
+    });
+    vscode.window.showInformationMessage(t('localAddTaken'));
+  }
+
   // ---- 로그 ----
 
   async function fetchLog(repo, p, olderThan) {
@@ -1148,8 +1215,16 @@ function createCommands(ctx) {
       if (!repo) return;
       const conflicted = list.filter((p) => ['C', '~'].includes(repo.statusOf(p)));
       if (conflicted.length === 0) return vscode.window.showInformationMessage(t('resolveNone'));
+      const details = await conflict.read(conflicted, repo.folder);
+      if (details.every(conflict.isLocalAdd)) return resolveLocalAdd(conflicted, repo);
+      const text = conflicted.length === 1 && details[0] && details[0].text;
       const options = [
-        { label: t('resolveWorking'), accept: 'working' },
+        ...(text ? [{ label: t('resolveMergeEditor'), merge: true }] : []),
+        {
+          label: t('resolveWorking'), accept: 'working',
+          // 로컬 미등록 + 서버 추가 충돌은 working으로 해결하면 삭제 예약(D)이 남는다(conflict.isLocalAdd).
+          ...(details.some(conflict.isLocalAdd) ? { description: t('resolveWorkingDeletes') } : {}),
+        },
         { label: t('resolveMineFull'), accept: 'mine-full' },
         { label: t('resolveTheirsFull'), accept: 'theirs-full' },
         { label: t('resolveMineConflict'), accept: 'mine-conflict' },
@@ -1158,6 +1233,7 @@ function createCommands(ctx) {
       ];
       const pick = await vscode.window.showQuickPick(options, { title: t('resolveTitle') });
       if (!pick) return;
+      if (pick.merge) return openMergeEditor(conflicted[0], text, repo);
       if (pick.tortoise) {
         tortoise.open('conflicteditor', conflicted, () => ctx.refreshAll());
         return;
