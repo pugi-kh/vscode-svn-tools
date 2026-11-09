@@ -12,7 +12,7 @@ const pkg = {
   name: 'svn-tools',
   displayName: 'SVN Tools',
   description: 'SVN Source Control panel, explorer context menu (SVN / TortoiseSVN) and status decorations including ignored files.',
-  version: '1.3.0',
+  version: '2.0.0',
   publisher: 'khoon',
   // 마켓플레이스는 SVG 아이콘을 받지 않아 256px PNG를 쓴다.
   icon: 'images/icon.png',
@@ -26,7 +26,7 @@ const pkg = {
   // 마켓플레이스·확장 검색어(최대 30개). git 확장이 아니므로 git은 넣지 않는다.
   keywords: [
     'svn', 'subversion', 'tortoisesvn', 'tortoise', 'scm', 'source control', 'version control',
-    'svn ignore', 'staging', 'commit', 'diff', 'blame', 'log',
+    'svn ignore', 'commit', 'diff', 'blame', 'log',
   ],
   extensionKind: ['workspace'],
   // 제한 모드(신뢰하지 않은 폴더)에서는 svn을 실행하지 않는다. 선언해 두면 VS Code가 꺼진 이유를 화면에 안내한다.
@@ -45,7 +45,7 @@ const pkg = {
 };
 
 // [id, 영어, 한국어, 아이콘]
-// 탐색기 우클릭 최상위에 바로 보이는 명령(update·add·stage·unstage·ignore)은 이름 앞에 SVN을 붙여 다른 메뉴와 구분한다.
+// 탐색기 우클릭 최상위에 바로 보이는 명령(update·add·ignore)은 이름 앞에 SVN을 붙여 다른 메뉴와 구분한다.
 const COMMANDS = [
   ['refresh', 'Refresh', '새로고침', '$(refresh)'],
   ['commitAll', 'Commit', '커밋', '$(check)'],
@@ -54,12 +54,8 @@ const COMMANDS = [
   ['add', 'SVN Add', 'SVN 추가', '$(add)'],
   ['addInclude', 'Include Contents', '하위 항목 포함'],
   ['addExclude', 'Exclude Contents', '하위 항목 제외'],
-  ['stage', 'SVN Stage', 'SVN 스테이징', '$(add)'],
-  ['stageInclude', 'Include Contents', '하위 항목 포함'],
-  ['stageExclude', 'Exclude Contents', '하위 항목 제외'],
-  ['unstage', 'SVN Unstage', 'SVN 스테이징 취소', '$(remove)'],
-  ['stageAll', 'Stage All', '모두 스테이징', '$(add)'],
-  ['unstageAll', 'Unstage All', '모두 스테이징 취소', '$(remove)'],
+  ['addAll', 'Add All', '모두 추가', '$(add)'],
+  ['undoAdd', 'SVN Undo Add (Revert)', 'SVN 추가 취소 (Revert)', '$(remove)'],
   ['ignore', 'SVN Ignore…', 'SVN 무시 목록에 추가…'],
   ['diff', 'Compare with BASE', 'BASE와 비교', '$(diff)'],
   ['diffRevision', 'Compare with Revision…', '리비전과 비교…'],
@@ -75,6 +71,7 @@ const COMMANDS = [
   ['editColors', 'Edit Status Colors…', '상태 색 편집…', '$(symbol-color)'],
   ['log', 'Show Log', '로그 보기', '$(history)'],
   ['resolve', 'Resolve Conflict…', '충돌 해결…'],
+  ['markResolved', 'Mark as Resolved', '해결됨으로 표시', '$(check)'],
   ['cleanup', 'Clean Up', '정리 (Cleanup)'],
   ['copyUrl', 'Copy SVN URL', 'SVN URL 복사'],
   ['historyRefresh', 'Refresh History', '이력 새로고침', '$(refresh)'],
@@ -123,28 +120,24 @@ const SUBMENUS = [
   ['tortoise', 'TortoiseSVN', 'TortoiseSVN'],
   ['delete', 'Delete', 'SVN에서 삭제'],
   ['addMenu', 'SVN Add', 'SVN 추가'],
-  ['stageMenu', 'SVN Stage', 'SVN 스테이징'],
 ];
 
 // 탐색기 우클릭 최상위: 항목 상태에 맞는 것만 보인다. [id, group, 조건]
 // 상태는 확장이 새로고침마다 넘기는 경로 목록으로 안다(extension.js onRepoChange, repository.js contextLists):
-//   svnTools.addable(새 파일) → SVN Add, svnTools.stageable(수정 파일) → SVN Stage, svnTools.staged → SVN Unstage,
-//   svnTools.renamable(svn 없이 이름을 바꾼 새 이름) → SVN Apply Rename(맨 위).
-// 메뉴 조건은 우클릭한 항목 하나만 본다. 여러 개를 고르면 상태를 알 수 없어서 SVN Stage ▸ 하나로 보이고,
-// 누른 뒤 항목별로 add할지 스테이징할지 나눠 처리한다(commands.js stageItems). 폴더면 하위 항목 포함·제외를 고른다.
+//   svnTools.addable(새 파일) → SVN Add, svnTools.renamable(svn 없이 이름을 바꾼 새 이름) → SVN Apply Rename(맨 위).
+// 메뉴 조건은 우클릭한 항목 하나만 본다. 폴더이거나 여러 개를 고르면 SVN Add ▸에서 하위 항목 포함·제외를 고른다.
 const ADDABLE = 'resourcePath in svnTools.addable';
-const STAGEABLE = 'resourcePath in svnTools.stageable';
-const STAGED = 'resourcePath in svnTools.staged';
 const RENAMABLE = 'resourcePath in svnTools.renamable';
+const UNDOABLE = 'resourcePath in svnTools.undoable';
+const CONFLICTED = 'resourcePath in svnTools.conflicted';
 const SINGLE = '!listMultiSelection';
 const TOP_LEVEL = [
   ['applyRename', '7_svn@0', RENAMABLE],
   ['update', '7_svn@1'],
   ['add', '7_svn@2', `${ADDABLE} && !explorerResourceIsFolder && ${SINGLE}`],
-  ['submenu:addMenu', '7_svn@2', `${ADDABLE} && explorerResourceIsFolder && ${SINGLE}`],
-  ['stage', '7_svn@3', `${STAGEABLE} && !explorerResourceIsFolder && ${SINGLE}`],
-  ['submenu:stageMenu', '7_svn@3', `(listMultiSelection || ${STAGEABLE} && explorerResourceIsFolder)`],
-  ['unstage', '7_svn@4', STAGED],
+  ['submenu:addMenu', '7_svn@2', `${ADDABLE} && (explorerResourceIsFolder || listMultiSelection)`],
+  ['resolve', '7_svn@0', CONFLICTED],
+  ['undoAdd', '7_svn@3', UNDOABLE],
   ['ignore', '7_svn@5', `(${ADDABLE} || listMultiSelection)`],
 ];
 
@@ -152,7 +145,7 @@ const TOP_LEVEL = [
 const SVN_SUBMENU = [
   ['commit', '1_sync@1'],
   ['diff', '2_view@1'], ['diffRevision', '2_view@2'], ['log', '2_view@3'],
-  ['submenu:delete', '3_edit@1'], ['rename', '3_edit@2'], ['revert', '3_edit@3'], ['resolve', '3_edit@4'],
+  ['submenu:delete', '3_edit@1'], ['rename', '3_edit@2'], ['revert', '3_edit@3'],
   ['ignoreReason', '4_ignore@1'], ['editIgnores', '4_ignore@2'],
   ['cleanup', '5_misc@1'], ['copyUrl', '5_misc@2'],
 ];
@@ -160,14 +153,14 @@ const SVN_SUBMENU = [
 // 하위 메뉴는 기본·자주 쓰는 동작을 위에 둔다.
 const DELETE_SUBMENU = [['deleteKeepLocal', '1@1'], ['deleteLocal', '1@2']];
 const ADD_SUBMENU = [['addInclude', '1@1'], ['addExclude', '1@2']];
-const STAGE_SUBMENU = [['stageInclude', '1@1'], ['stageExclude', '1@2']];
 
 // 명령 팔레트에 보일 명령. 인자 없이 부르면 열린 편집기 파일(없으면 작업 폴더)이 대상이고,
-// Commit은 패널 Commit과 같이 스테이징된 것을 커밋한다(commands.js commitAll).
-const PALETTE = ['commitAll', 'update', 'refresh', 'stage', 'unstage', 'stageAll', 'unstageAll', 'diff', 'diffRevision', 'log', 'revert', 'editIgnores', 'editColors', 'cleanup'];
+// Commit은 패널 Commit과 같이 커밋 탭을 연다(commands.js commitAll).
+const PALETTE = ['commitAll', 'update', 'refresh', 'addAll', 'diff', 'diffRevision', 'log', 'revert', 'resolve', 'markResolved', 'editIgnores', 'editColors', 'cleanup'];
 
 const SCM = 'scmProvider == svnTools';
 const HISTORY = 'view == svnTools.history';
+const COMMIT_TAB = "webviewId == 'svnTools.commit'";
 // 영역 언어가 lang인가: 영역 설정이 lang이거나, default면서 전체 언어가 lang. area: 'menu' | 'scm'
 const langWhen = (lang, area = 'menu') => {
   const k = `config.svnTools.${area}Language`;
@@ -206,12 +199,14 @@ const contextMenu = (when) => [
   ...item('submenu:svn', '7_svn@6', when),
   ...item('submenu:tortoise', '7_svn@7', when),
 ];
-// Source Control 패널 항목의 상태(repository.js resourceState의 contextValue): staged | changed | unversioned | conflicted
+// Source Control 패널 항목의 상태(repository.js resourceState의 contextValue): changed | unversioned | conflicted | incomplete
 const st = (...names) => `(${names.map((n) => `scmResourceState == ${n}`).join(' || ')})`;
 const grp = (...names) => `(${names.map((n) => `scmResourceGroup == ${n}`).join(' || ')})`;
 const menus = {
   'explorer/context': contextMenu('svnTools.active'),
   'editor/title/context': contextMenu(fileWhen),
+  // 충돌 파일 탭 제목줄의 ✓(해결됨으로 표시). 병합 편집기 탭에서는 VS Code에 따라 안 보일 수 있어 상태 표시줄에도 둔다(extension.js).
+  'editor/title': item('markResolved', 'navigation', 'resourceScheme == file && resourcePath in svnTools.conflicted', 'message'),
   'scm/title': [
     ...scmItem('commitAll', 'navigation@1', SCM),
     ...scmItem('update', 'navigation@2', SCM),
@@ -222,28 +217,35 @@ const menus = {
     ...scmItem('submenu:tortoise', '2_tortoise@1', SCM),
   ],
   'scm/resourceGroup/context': [
-    ...scmItem('unstageAll', 'inline', and(SCM, grp('staged'))),
     ...scmItem('revertAll', 'inline', and(SCM, grp('changes'))),
-    ...scmItem('stageAll', 'inline', and(SCM, grp('changes', 'unversioned'))),
-    ...scmItem('unstageAll', '1_edit', and(SCM, grp('staged'))),
-    ...scmItem('stageAll', '1_edit', and(SCM, grp('changes', 'unversioned'))),
+    ...scmItem('addAll', 'inline', and(SCM, grp('unversioned'))),
     ...scmItem('revertAll', '1_edit', and(SCM, grp('changes'))),
+    ...scmItem('addAll', '1_edit', and(SCM, grp('unversioned'))),
   ],
   'scm/resourceState/context': [
     ...scmItem('openFile', 'inline@1', SCM),
     ...scmItem('revert', 'inline@2', and(SCM, st('changed'))),
-    ...scmItem('stage', 'inline@3', and(SCM, st('changed', 'unversioned'))),
-    ...scmItem('unstage', 'inline@3', and(SCM, st('staged'))),
-    ...scmItem('stage', '1_stage@1', and(SCM, st('changed', 'unversioned'))),
-    ...scmItem('unstage', '1_stage@2', and(SCM, st('staged'))),
-    ...scmItem('diff', '2_view@1', and(SCM, st('changed', 'staged'))),
-    ...scmItem('diffRevision', '2_view@2', and(SCM, st('changed', 'staged'))),
-    ...scmItem('log', '2_view@3', and(SCM, st('changed', 'staged'))),
-    ...scmItem('revert', '3_edit@1', and(SCM, st('changed', 'staged'))),
+    ...scmItem('undoAdd', 'inline@2', and(SCM, st('added'))),
+    ...scmItem('add', 'inline@3', and(SCM, st('unversioned'))),
+    ...scmItem('add', '1_add@1', and(SCM, st('unversioned'))),
+    ...scmItem('diff', '2_view@1', and(SCM, st('changed'))),
+    ...scmItem('diffRevision', '2_view@2', and(SCM, st('changed'))),
+    ...scmItem('log', '2_view@3', and(SCM, st('changed'))),
+    ...scmItem('revert', '3_edit@1', and(SCM, st('changed'))),
+    ...scmItem('undoAdd', '3_edit@1', and(SCM, st('added'))),
     ...scmItem('resolve', '3_edit@2', and(SCM, st('conflicted'))),
-    ...scmItem('submenu:delete', '3_edit@3', and(SCM, st('changed', 'staged'))),
+    ...scmItem('submenu:delete', '3_edit@3', and(SCM, st('changed', 'added'))),
     ...scmItem('ignore', '3_edit@4', and(SCM, st('unversioned'))),
     ...scmItem('submenu:tortoise', '4_tortoise@1', SCM),
+  ],
+  // 커밋 탭(src/commitView.js)의 항목 우클릭. 항목의 data-vscode-context(svnKind 등)로 나눈다. 문구 언어를 따른다.
+  'webview/context': [
+    ...item('applyRename', '0_rename@1', and(COMMIT_TAB, 'svnRenamable'), 'message'),
+    ...item('diff', '1_view@1', and(COMMIT_TAB, "svnKind == 'change'", "svnCode =~ /^[MR]$/"), 'message'),
+    ...item('openFile', '1_view@2', and(COMMIT_TAB, 'svnPath'), 'message'),
+    ...item('log', '1_view@3', and(COMMIT_TAB, "svnKind == 'change'", "svnCode != 'A'"), 'message'),
+    ...item('ignore', '2_edit@1', and(COMMIT_TAB, "svnKind == 'unversioned'"), 'message'),
+    ...item('revert', '2_edit@2', and(COMMIT_TAB, "svnKind == 'change'"), 'message'),
   ],
   // SVN 이력 뷰(src/historyView.js). 패널 아래에 있어서 패널 언어를 따른다.
   'view/title': [
@@ -272,7 +274,6 @@ for (const lang of LANGUAGES) {
   menus[`svnTools.tortoise.${lang}`] = inner(TORTOISE.map(([id], i) => [`tortoise.${id}`, `${TORTOISE_GROUPS[id]}@${i}`]));
   menus[`svnTools.delete.${lang}`] = inner(DELETE_SUBMENU);
   menus[`svnTools.addMenu.${lang}`] = inner(ADD_SUBMENU);
-  menus[`svnTools.stageMenu.${lang}`] = inner(STAGE_SUBMENU);
 }
 
 // 설정 화면은 묶음(title)별로 나뉜다. 언어 묶음은 전체 → 영역별 순서(order)로 위계가 보이게 한다.
@@ -291,7 +292,7 @@ const languageConfiguration = {
     'svnTools.menuLanguage': {
       type: 'string', enum: AREA, default: 'default', order: 1,
       enumDescriptions: AREA_DESCRIPTIONS,
-      markdownDescription: '└ **우클릭 메뉴 언어** — 탐색기·편집기 탭 우클릭의 SVN Add / SVN Stage 등과 SVN ▸, TortoiseSVN ▸ 하위 메뉴, '
+      markdownDescription: '└ **우클릭 메뉴 언어** — 탐색기·편집기 탭 우클릭의 SVN Add / SVN Ignore… 등과 SVN ▸, TortoiseSVN ▸ 하위 메뉴, '
         + '명령 팔레트(Ctrl+Shift+P)의 명령 이름.\n\n'
         + '└ **Context menu language** — SVN items and the SVN ▸ / TortoiseSVN ▸ submenus in the explorer and editor tab context menus, '
         + 'and command names in the Command Palette.',
@@ -299,14 +300,14 @@ const languageConfiguration = {
     'svnTools.scmLanguage': {
       type: 'string', enum: AREA, default: 'default', order: 2,
       enumDescriptions: AREA_DESCRIPTIONS,
-      markdownDescription: '└ **Source Control 패널 언어** — 그룹 이름(Staged Changes / Changes …), 패널 위쪽·항목 옆 버튼과 패널 우클릭 메뉴, '
-        + '커밋 메시지 입력칸의 안내 문구.\n\n'
-        + '└ **Source Control panel language** — group names, the buttons and context menus in the panel, and the commit message hint.',
+      markdownDescription: '└ **Source Control 패널 언어** — 그룹 이름(Modified / Unversioned …), 패널 위쪽·항목 옆 버튼과 패널 우클릭 메뉴, SVN 칸의 커밋 버튼, 상태 표시줄 버튼, '
+        + 'SVN 이력 칸.\n\n'
+        + '└ **Source Control panel language** — group names, the buttons and context menus in the panel, and the SVN History view.',
     },
     'svnTools.messageLanguage': {
       type: 'string', enum: AREA, default: 'default', order: 3,
       enumDescriptions: AREA_DESCRIPTIONS,
-      markdownDescription: '└ **알림·창 언어** — 오른쪽 아래 알림, 확인 창, 입력·선택 창, 무시 목록 편집·무시된 원인·커밋 확인 탭, '
+      markdownDescription: '└ **알림·창 언어** — 오른쪽 아래 알림, 확인 창, 입력·선택 창, 무시 목록 편집·무시된 원인·커밋 탭(우클릭 메뉴 포함), '
         + '탐색기 상태 툴팁.\n\n'
         + '└ **Notification and view language** — notifications, dialogs, input and pick boxes, the ignore list / ignore reason / '
         + 'commit review tabs, and explorer status tooltips.',
@@ -317,12 +318,6 @@ const languageConfiguration = {
 const configuration = {
   title: 'SVN Tools',
   properties: {
-    'svnTools.commit.smartCommit': {
-      type: 'string', enum: ['ask', 'always', 'never'], default: 'ask',
-      enumDescriptions: ['물어본다 / Ask', '항상 변경을 모두 스테이징하고 이어서 커밋 / Always stage all changes and continue', '스테이징하지 않는다 / Never'],
-      markdownDescription: '스테이징된 변경이 없을 때 Commit을 누르면. 확인 창의 "다시 묻지 않음"은 `never`로 바꾼다.\n\n'
-        + 'When committing with nothing staged. "Never" in the dialog sets this to `never`.',
-    },
     'svnTools.rename.askOnRename': {
       type: 'boolean', default: true,
       markdownDescription: '**이름 바꾸기 알림 사용.** 탐색기(F2 등)에서 관리 중인 파일·폴더 이름을 바꾸면 SVN 이름 바꾸기(이력 유지)로 적용할지 '
@@ -339,10 +334,6 @@ const configuration = {
     'svnTools.history.autoRefreshMinutes': {
       type: 'number', default: 5, minimum: 1,
       description: 'SVN 이력 칸 자동 확인 간격(분). 자동 확인이 켜져 있을 때 쓴다 / Minutes between checks, when automatic check is on',
-    },
-    'svnTools.commit.review': {
-      type: 'boolean', default: true,
-      description: '커밋 확인 탭 사용: 커밋 직전에 메시지와 올라갈 항목을 한 번 더 보여 준다 / Use the commit review tab: show the message and items right before committing',
     },
     'svnTools.commit.checkOutOfDate': {
       type: 'boolean', default: true,

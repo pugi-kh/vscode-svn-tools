@@ -46,12 +46,10 @@ class DecorationProvider {
     const own = code && STYLE[code];
     const inside = insideTip(repo.insideOf(uri.fsPath));
     if (own) {
-      // 스테이징된 항목은 이니셜·색은 그대로 두고 배지 뒤에 +를 붙인다(패널의 + 버튼과 같은 기호).
-      const staged = own.badge && repo.isStaged(uri.fsPath);
       return {
-        badge: staged ? `${own.badge}+` : own.badge,
+        badge: own.badge,
         color: new vscode.ThemeColor(own.color),
-        tooltip: `SVN: ${t(own.tip)}${staged ? ` (${t('tipStaged')})` : ''}${inside ? `\n${inside.tip}` : ''}`,
+        tooltip: `SVN: ${t(own.tip)}${inside ? `\n${inside.tip}` : ''}`,
       };
     }
     if (!inside) return undefined;

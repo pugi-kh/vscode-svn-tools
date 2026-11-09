@@ -44,7 +44,6 @@ class HistoryView {
       vscode.window.registerFileDecorationProvider({ provideFileDecoration: (uri) => this.decorate(uri) }),
       vscode.commands.registerCommand('svnTools.history.diff', (node) => this.diff(node).catch((e) => this.fail(e))),
       vscode.commands.registerCommand('svnTools.history.more', (repo) => this.more(repo).catch((e) => this.fail(e))),
-      vscode.commands.registerCommand('svnTools.history.update', (node) => this.askUpdate(node)),
     ];
     this.reloadConfig();
   }
@@ -204,8 +203,8 @@ class HistoryView {
       const item = new vscode.TreeItem(s('historyIncoming', node.count), None);
       item.description = s('historyIncomingHint');
       item.iconPath = new vscode.ThemeIcon('cloud-download', new vscode.ThemeColor('charts.blue'));
-      // 누르자마자 업데이트하면 무슨 일이 일어났는지 알기 어렵다(사용자 제보) — 묻고 한다
-      item.command = { command: 'svnTools.history.update', title: 'Update', arguments: [node] };
+      // 알림만 한다. 이 줄을 눌러 업데이트하게 했더니 실수로 누를 수 있었다(사용자 의견) — 칸 위쪽 업데이트 버튼으로 받는다.
+      item.tooltip = s('historyIncomingTip');
       return item;
     }
     if (node.type === 'more') {
@@ -282,12 +281,6 @@ class HistoryView {
     const name = path.posix.basename(p.path);
     await vscode.commands.executeCommand('vscode.diff', side(rev - 1, p.action === 'A'), side(rev, p.action === 'D'),
       s('historyDiffTitle', name, rev - 1, rev));
-  }
-
-  async askUpdate(node) {
-    const yes = s('historyUpdateYes');
-    const pick = await vscode.window.showInformationMessage(s('historyUpdateAsk', node.count), { modal: true }, yes);
-    if (pick === yes) await vscode.commands.executeCommand('svnTools.update', vscode.Uri.file(node.repo.folder));
   }
 
   async copyMessage(node) {

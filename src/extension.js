@@ -8,7 +8,7 @@ const { HistoryView } = require('./historyView');
 const { SvnSetup } = require('./svnSetup');
 const { COMMANDS: TORTOISE_COMMANDS } = require('./tortoise');
 const { LANGUAGES } = require('./languages');
-const { resetLanguageCache } = require('./i18n');
+const { resetLanguageCache, t } = require('./i18n');
 
 let repositories = [];
 
@@ -46,7 +46,6 @@ function activate(context) {
   ctx.setupSvn = () => setup.install();
   ctx.history = new HistoryView(ctx);
   context.subscriptions.push(ctx.history);
-
   // svn이 없을 때의 안내·설치(svnSetup.js). svn을 새로 찾으면 아직 못 연 작업 폴더를 다시 연다.
   const setup = new SvnSetup(output, () => Promise.all((vscode.workspace.workspaceFolders || []).map(openFolder)));
   svn.findSvn().then((f) => output.appendLine(`svn: ${f || 'not found'}`));
@@ -95,7 +94,7 @@ function activate(context) {
   }
 
   // 상태가 바뀌면 탐색기 표시를 새로 그리고, 우클릭 메뉴 조건(resourcePath in ...)에 쓸 경로 목록을 넘긴다.
-  // 메뉴는 이 목록으로 항목 상태를 알아서 새 파일엔 SVN Add, 수정 파일엔 SVN Stage, 스테이징된 것엔 SVN Unstage만 보인다.
+  // 메뉴는 이 목록으로 항목 상태를 알아서 새 파일에만 SVN Add, 이름을 바꾼 항목에만 SVN Apply Rename을 보인다.
   // 새로고침마다 부르지만 바뀐 것만 보낸다: 목록은 수십 KB가 UI 스레드로 가고, 탐색기 표시는 보이는 파일 전부를 다시 계산한다.
   // 목록과 요약은 저장소가 render 때 만들어 둔다(repository.js lists, decoSig).
   const lastSig = new Map();
@@ -106,7 +105,8 @@ function activate(context) {
       if (repo) lastSig.set(repo, repo.decoSig);
       decorations.refresh();
     }
-    const lists = { addable: [], stageable: [], staged: [], renamable: [] };
+    if (ctx.updateResolveItem) ctx.updateResolveItem();  // 해결되면 상태 표시줄 버튼을 내린다
+    const lists = { addable: [], undoable: [], conflicted: [], renamable: [] };
     for (const r of repositories) for (const k of Object.keys(lists)) lists[k].push(...r.lists[k]);
     for (const [k, v] of Object.entries(lists)) {
       const sig = v.join('\n');
@@ -149,8 +149,25 @@ function activate(context) {
     }
   };
   for (const [id, fn] of Object.entries(handlers)) {
-    if (id !== 'tortoise' && id !== 'onRenamed') register(id, fn);
+    if (!['tortoise', 'onRenamed', 'activeConflict'].includes(id)) register(id, fn);
   }
+
+  // 충돌 파일(또는 그 병합 편집기)을 보고 있으면 상태 표시줄에 "해결됨으로 표시"를 띄운다.
+  // 병합 편집기를 열 때의 알림은 닫히거나 묻히기 쉬워서, 보고 있는 동안 늘 보이는 자리에 둔다(사용자 결정).
+  const resolveItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
+  const updateResolveItem = () => {
+    const uri = handlers.activeConflict();
+    if (!uri) return resolveItem.hide();
+    resolveItem.text = `$(check) ${t('markResolvedStatus', require('path').basename(uri.fsPath))}`;
+    resolveItem.tooltip = t('markResolvedTip');
+    resolveItem.command = { command: 'svnTools.markResolved', title: 'Mark as Resolved', arguments: [uri] };
+    resolveItem.show();
+  };
+  ctx.updateResolveItem = updateResolveItem;
+  context.subscriptions.push(resolveItem,
+    vscode.window.tabGroups.onDidChangeTabs(updateResolveItem),
+    vscode.window.tabGroups.onDidChangeTabGroups(updateResolveItem),
+    vscode.window.onDidChangeActiveTextEditor(updateResolveItem));
   for (const name of Object.keys(TORTOISE_COMMANDS)) {
     register(`tortoise.${name}`, handlers.tortoise(name));
   }

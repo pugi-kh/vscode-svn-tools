@@ -2,7 +2,7 @@
   "name": "svn-tools",
   "displayName": "SVN Tools",
   "description": "SVN Source Control panel, explorer context menu (SVN / TortoiseSVN) and status decorations including ignored files.",
-  "version": "1.3.0",
+  "version": "2.0.0",
   "publisher": "khoon",
   "icon": "images/icon.png",
   "license": "MIT",
@@ -30,7 +30,6 @@
     "source control",
     "version control",
     "svn ignore",
-    "staging",
     "commit",
     "diff",
     "blame",
@@ -96,35 +95,14 @@
         "category": "SVN"
       },
       {
-        "command": "svnTools.stage.en",
-        "title": "SVN Stage",
-        "icon": "$(add)"
-      },
-      {
-        "command": "svnTools.stageInclude.en",
-        "title": "Include Contents",
-        "category": "SVN"
-      },
-      {
-        "command": "svnTools.stageExclude.en",
-        "title": "Exclude Contents",
-        "category": "SVN"
-      },
-      {
-        "command": "svnTools.unstage.en",
-        "title": "SVN Unstage",
-        "icon": "$(remove)"
-      },
-      {
-        "command": "svnTools.stageAll.en",
-        "title": "Stage All",
+        "command": "svnTools.addAll.en",
+        "title": "Add All",
         "category": "SVN",
         "icon": "$(add)"
       },
       {
-        "command": "svnTools.unstageAll.en",
-        "title": "Unstage All",
-        "category": "SVN",
+        "command": "svnTools.undoAdd.en",
+        "title": "SVN Undo Add (Revert)",
         "icon": "$(remove)"
       },
       {
@@ -206,6 +184,12 @@
         "command": "svnTools.resolve.en",
         "title": "Resolve Conflict…",
         "category": "SVN"
+      },
+      {
+        "command": "svnTools.markResolved.en",
+        "title": "Mark as Resolved",
+        "category": "SVN",
+        "icon": "$(check)"
       },
       {
         "command": "svnTools.cleanup.en",
@@ -377,35 +361,14 @@
         "category": "SVN"
       },
       {
-        "command": "svnTools.stage.ko",
-        "title": "SVN 스테이징",
-        "icon": "$(add)"
-      },
-      {
-        "command": "svnTools.stageInclude.ko",
-        "title": "하위 항목 포함",
-        "category": "SVN"
-      },
-      {
-        "command": "svnTools.stageExclude.ko",
-        "title": "하위 항목 제외",
-        "category": "SVN"
-      },
-      {
-        "command": "svnTools.unstage.ko",
-        "title": "SVN 스테이징 취소",
-        "icon": "$(remove)"
-      },
-      {
-        "command": "svnTools.stageAll.ko",
-        "title": "모두 스테이징",
+        "command": "svnTools.addAll.ko",
+        "title": "모두 추가",
         "category": "SVN",
         "icon": "$(add)"
       },
       {
-        "command": "svnTools.unstageAll.ko",
-        "title": "모두 스테이징 취소",
-        "category": "SVN",
+        "command": "svnTools.undoAdd.ko",
+        "title": "SVN 추가 취소 (Revert)",
         "icon": "$(remove)"
       },
       {
@@ -487,6 +450,12 @@
         "command": "svnTools.resolve.ko",
         "title": "충돌 해결…",
         "category": "SVN"
+      },
+      {
+        "command": "svnTools.markResolved.ko",
+        "title": "해결됨으로 표시",
+        "category": "SVN",
+        "icon": "$(check)"
       },
       {
         "command": "svnTools.cleanup.ko",
@@ -701,10 +670,6 @@
         "label": "SVN Add"
       },
       {
-        "id": "svnTools.stageMenu.en",
-        "label": "SVN Stage"
-      },
-      {
         "id": "svnTools.svn.ko",
         "label": "SVN"
       },
@@ -719,10 +684,6 @@
       {
         "id": "svnTools.addMenu.ko",
         "label": "SVN 추가"
-      },
-      {
-        "id": "svnTools.stageMenu.ko",
-        "label": "SVN 스테이징"
       }
     ],
     "menus": {
@@ -760,42 +721,32 @@
         {
           "submenu": "svnTools.addMenu.en",
           "group": "7_svn@2",
-          "when": "(config.svnTools.menuLanguage == 'en' || config.svnTools.menuLanguage == 'default' && config.svnTools.language == 'en') && svnTools.active && resourcePath in svnTools.addable && explorerResourceIsFolder && !listMultiSelection"
+          "when": "(config.svnTools.menuLanguage == 'en' || config.svnTools.menuLanguage == 'default' && config.svnTools.language == 'en') && svnTools.active && resourcePath in svnTools.addable && (explorerResourceIsFolder || listMultiSelection)"
         },
         {
           "submenu": "svnTools.addMenu.ko",
           "group": "7_svn@2",
-          "when": "(config.svnTools.menuLanguage == 'ko' || config.svnTools.menuLanguage == 'default' && config.svnTools.language == 'ko') && svnTools.active && resourcePath in svnTools.addable && explorerResourceIsFolder && !listMultiSelection"
+          "when": "(config.svnTools.menuLanguage == 'ko' || config.svnTools.menuLanguage == 'default' && config.svnTools.language == 'ko') && svnTools.active && resourcePath in svnTools.addable && (explorerResourceIsFolder || listMultiSelection)"
         },
         {
-          "command": "svnTools.stage.en",
+          "command": "svnTools.resolve.en",
+          "group": "7_svn@0",
+          "when": "(config.svnTools.menuLanguage == 'en' || config.svnTools.menuLanguage == 'default' && config.svnTools.language == 'en') && svnTools.active && resourcePath in svnTools.conflicted"
+        },
+        {
+          "command": "svnTools.resolve.ko",
+          "group": "7_svn@0",
+          "when": "(config.svnTools.menuLanguage == 'ko' || config.svnTools.menuLanguage == 'default' && config.svnTools.language == 'ko') && svnTools.active && resourcePath in svnTools.conflicted"
+        },
+        {
+          "command": "svnTools.undoAdd.en",
           "group": "7_svn@3",
-          "when": "(config.svnTools.menuLanguage == 'en' || config.svnTools.menuLanguage == 'default' && config.svnTools.language == 'en') && svnTools.active && resourcePath in svnTools.stageable && !explorerResourceIsFolder && !listMultiSelection"
+          "when": "(config.svnTools.menuLanguage == 'en' || config.svnTools.menuLanguage == 'default' && config.svnTools.language == 'en') && svnTools.active && resourcePath in svnTools.undoable"
         },
         {
-          "command": "svnTools.stage.ko",
+          "command": "svnTools.undoAdd.ko",
           "group": "7_svn@3",
-          "when": "(config.svnTools.menuLanguage == 'ko' || config.svnTools.menuLanguage == 'default' && config.svnTools.language == 'ko') && svnTools.active && resourcePath in svnTools.stageable && !explorerResourceIsFolder && !listMultiSelection"
-        },
-        {
-          "submenu": "svnTools.stageMenu.en",
-          "group": "7_svn@3",
-          "when": "(config.svnTools.menuLanguage == 'en' || config.svnTools.menuLanguage == 'default' && config.svnTools.language == 'en') && svnTools.active && (listMultiSelection || resourcePath in svnTools.stageable && explorerResourceIsFolder)"
-        },
-        {
-          "submenu": "svnTools.stageMenu.ko",
-          "group": "7_svn@3",
-          "when": "(config.svnTools.menuLanguage == 'ko' || config.svnTools.menuLanguage == 'default' && config.svnTools.language == 'ko') && svnTools.active && (listMultiSelection || resourcePath in svnTools.stageable && explorerResourceIsFolder)"
-        },
-        {
-          "command": "svnTools.unstage.en",
-          "group": "7_svn@4",
-          "when": "(config.svnTools.menuLanguage == 'en' || config.svnTools.menuLanguage == 'default' && config.svnTools.language == 'en') && svnTools.active && resourcePath in svnTools.staged"
-        },
-        {
-          "command": "svnTools.unstage.ko",
-          "group": "7_svn@4",
-          "when": "(config.svnTools.menuLanguage == 'ko' || config.svnTools.menuLanguage == 'default' && config.svnTools.language == 'ko') && svnTools.active && resourcePath in svnTools.staged"
+          "when": "(config.svnTools.menuLanguage == 'ko' || config.svnTools.menuLanguage == 'default' && config.svnTools.language == 'ko') && svnTools.active && resourcePath in svnTools.undoable"
         },
         {
           "command": "svnTools.ignore.en",
@@ -862,42 +813,32 @@
         {
           "submenu": "svnTools.addMenu.en",
           "group": "7_svn@2",
-          "when": "(config.svnTools.menuLanguage == 'en' || config.svnTools.menuLanguage == 'default' && config.svnTools.language == 'en') && svnTools.active && resourceScheme == file && resourcePath in svnTools.addable && explorerResourceIsFolder && !listMultiSelection"
+          "when": "(config.svnTools.menuLanguage == 'en' || config.svnTools.menuLanguage == 'default' && config.svnTools.language == 'en') && svnTools.active && resourceScheme == file && resourcePath in svnTools.addable && (explorerResourceIsFolder || listMultiSelection)"
         },
         {
           "submenu": "svnTools.addMenu.ko",
           "group": "7_svn@2",
-          "when": "(config.svnTools.menuLanguage == 'ko' || config.svnTools.menuLanguage == 'default' && config.svnTools.language == 'ko') && svnTools.active && resourceScheme == file && resourcePath in svnTools.addable && explorerResourceIsFolder && !listMultiSelection"
+          "when": "(config.svnTools.menuLanguage == 'ko' || config.svnTools.menuLanguage == 'default' && config.svnTools.language == 'ko') && svnTools.active && resourceScheme == file && resourcePath in svnTools.addable && (explorerResourceIsFolder || listMultiSelection)"
         },
         {
-          "command": "svnTools.stage.en",
+          "command": "svnTools.resolve.en",
+          "group": "7_svn@0",
+          "when": "(config.svnTools.menuLanguage == 'en' || config.svnTools.menuLanguage == 'default' && config.svnTools.language == 'en') && svnTools.active && resourceScheme == file && resourcePath in svnTools.conflicted"
+        },
+        {
+          "command": "svnTools.resolve.ko",
+          "group": "7_svn@0",
+          "when": "(config.svnTools.menuLanguage == 'ko' || config.svnTools.menuLanguage == 'default' && config.svnTools.language == 'ko') && svnTools.active && resourceScheme == file && resourcePath in svnTools.conflicted"
+        },
+        {
+          "command": "svnTools.undoAdd.en",
           "group": "7_svn@3",
-          "when": "(config.svnTools.menuLanguage == 'en' || config.svnTools.menuLanguage == 'default' && config.svnTools.language == 'en') && svnTools.active && resourceScheme == file && resourcePath in svnTools.stageable && !explorerResourceIsFolder && !listMultiSelection"
+          "when": "(config.svnTools.menuLanguage == 'en' || config.svnTools.menuLanguage == 'default' && config.svnTools.language == 'en') && svnTools.active && resourceScheme == file && resourcePath in svnTools.undoable"
         },
         {
-          "command": "svnTools.stage.ko",
+          "command": "svnTools.undoAdd.ko",
           "group": "7_svn@3",
-          "when": "(config.svnTools.menuLanguage == 'ko' || config.svnTools.menuLanguage == 'default' && config.svnTools.language == 'ko') && svnTools.active && resourceScheme == file && resourcePath in svnTools.stageable && !explorerResourceIsFolder && !listMultiSelection"
-        },
-        {
-          "submenu": "svnTools.stageMenu.en",
-          "group": "7_svn@3",
-          "when": "(config.svnTools.menuLanguage == 'en' || config.svnTools.menuLanguage == 'default' && config.svnTools.language == 'en') && svnTools.active && resourceScheme == file && (listMultiSelection || resourcePath in svnTools.stageable && explorerResourceIsFolder)"
-        },
-        {
-          "submenu": "svnTools.stageMenu.ko",
-          "group": "7_svn@3",
-          "when": "(config.svnTools.menuLanguage == 'ko' || config.svnTools.menuLanguage == 'default' && config.svnTools.language == 'ko') && svnTools.active && resourceScheme == file && (listMultiSelection || resourcePath in svnTools.stageable && explorerResourceIsFolder)"
-        },
-        {
-          "command": "svnTools.unstage.en",
-          "group": "7_svn@4",
-          "when": "(config.svnTools.menuLanguage == 'en' || config.svnTools.menuLanguage == 'default' && config.svnTools.language == 'en') && svnTools.active && resourceScheme == file && resourcePath in svnTools.staged"
-        },
-        {
-          "command": "svnTools.unstage.ko",
-          "group": "7_svn@4",
-          "when": "(config.svnTools.menuLanguage == 'ko' || config.svnTools.menuLanguage == 'default' && config.svnTools.language == 'ko') && svnTools.active && resourceScheme == file && resourcePath in svnTools.staged"
+          "when": "(config.svnTools.menuLanguage == 'ko' || config.svnTools.menuLanguage == 'default' && config.svnTools.language == 'ko') && svnTools.active && resourceScheme == file && resourcePath in svnTools.undoable"
         },
         {
           "command": "svnTools.ignore.en",
@@ -928,6 +869,18 @@
           "submenu": "svnTools.tortoise.ko",
           "group": "7_svn@7",
           "when": "(config.svnTools.menuLanguage == 'ko' || config.svnTools.menuLanguage == 'default' && config.svnTools.language == 'ko') && svnTools.active && resourceScheme == file"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "svnTools.markResolved.en",
+          "group": "navigation",
+          "when": "(config.svnTools.messageLanguage == 'en' || config.svnTools.messageLanguage == 'default' && config.svnTools.language == 'en') && resourceScheme == file && resourcePath in svnTools.conflicted"
+        },
+        {
+          "command": "svnTools.markResolved.ko",
+          "group": "navigation",
+          "when": "(config.svnTools.messageLanguage == 'ko' || config.svnTools.messageLanguage == 'default' && config.svnTools.language == 'ko') && resourceScheme == file && resourcePath in svnTools.conflicted"
         }
       ],
       "scm/title": [
@@ -1004,16 +957,6 @@
       ],
       "scm/resourceGroup/context": [
         {
-          "command": "svnTools.unstageAll.en",
-          "group": "inline",
-          "when": "(config.svnTools.scmLanguage == 'en' || config.svnTools.scmLanguage == 'default' && config.svnTools.language == 'en') && scmProvider == svnTools && (scmResourceGroup == staged)"
-        },
-        {
-          "command": "svnTools.unstageAll.ko",
-          "group": "inline",
-          "when": "(config.svnTools.scmLanguage == 'ko' || config.svnTools.scmLanguage == 'default' && config.svnTools.language == 'ko') && scmProvider == svnTools && (scmResourceGroup == staged)"
-        },
-        {
           "command": "svnTools.revertAll.en",
           "group": "inline",
           "when": "(config.svnTools.scmLanguage == 'en' || config.svnTools.scmLanguage == 'default' && config.svnTools.language == 'en') && scmProvider == svnTools && (scmResourceGroup == changes)"
@@ -1024,34 +967,14 @@
           "when": "(config.svnTools.scmLanguage == 'ko' || config.svnTools.scmLanguage == 'default' && config.svnTools.language == 'ko') && scmProvider == svnTools && (scmResourceGroup == changes)"
         },
         {
-          "command": "svnTools.stageAll.en",
+          "command": "svnTools.addAll.en",
           "group": "inline",
-          "when": "(config.svnTools.scmLanguage == 'en' || config.svnTools.scmLanguage == 'default' && config.svnTools.language == 'en') && scmProvider == svnTools && (scmResourceGroup == changes || scmResourceGroup == unversioned)"
+          "when": "(config.svnTools.scmLanguage == 'en' || config.svnTools.scmLanguage == 'default' && config.svnTools.language == 'en') && scmProvider == svnTools && (scmResourceGroup == unversioned)"
         },
         {
-          "command": "svnTools.stageAll.ko",
+          "command": "svnTools.addAll.ko",
           "group": "inline",
-          "when": "(config.svnTools.scmLanguage == 'ko' || config.svnTools.scmLanguage == 'default' && config.svnTools.language == 'ko') && scmProvider == svnTools && (scmResourceGroup == changes || scmResourceGroup == unversioned)"
-        },
-        {
-          "command": "svnTools.unstageAll.en",
-          "group": "1_edit",
-          "when": "(config.svnTools.scmLanguage == 'en' || config.svnTools.scmLanguage == 'default' && config.svnTools.language == 'en') && scmProvider == svnTools && (scmResourceGroup == staged)"
-        },
-        {
-          "command": "svnTools.unstageAll.ko",
-          "group": "1_edit",
-          "when": "(config.svnTools.scmLanguage == 'ko' || config.svnTools.scmLanguage == 'default' && config.svnTools.language == 'ko') && scmProvider == svnTools && (scmResourceGroup == staged)"
-        },
-        {
-          "command": "svnTools.stageAll.en",
-          "group": "1_edit",
-          "when": "(config.svnTools.scmLanguage == 'en' || config.svnTools.scmLanguage == 'default' && config.svnTools.language == 'en') && scmProvider == svnTools && (scmResourceGroup == changes || scmResourceGroup == unversioned)"
-        },
-        {
-          "command": "svnTools.stageAll.ko",
-          "group": "1_edit",
-          "when": "(config.svnTools.scmLanguage == 'ko' || config.svnTools.scmLanguage == 'default' && config.svnTools.language == 'ko') && scmProvider == svnTools && (scmResourceGroup == changes || scmResourceGroup == unversioned)"
+          "when": "(config.svnTools.scmLanguage == 'ko' || config.svnTools.scmLanguage == 'default' && config.svnTools.language == 'ko') && scmProvider == svnTools && (scmResourceGroup == unversioned)"
         },
         {
           "command": "svnTools.revertAll.en",
@@ -1062,6 +985,16 @@
           "command": "svnTools.revertAll.ko",
           "group": "1_edit",
           "when": "(config.svnTools.scmLanguage == 'ko' || config.svnTools.scmLanguage == 'default' && config.svnTools.language == 'ko') && scmProvider == svnTools && (scmResourceGroup == changes)"
+        },
+        {
+          "command": "svnTools.addAll.en",
+          "group": "1_edit",
+          "when": "(config.svnTools.scmLanguage == 'en' || config.svnTools.scmLanguage == 'default' && config.svnTools.language == 'en') && scmProvider == svnTools && (scmResourceGroup == unversioned)"
+        },
+        {
+          "command": "svnTools.addAll.ko",
+          "group": "1_edit",
+          "when": "(config.svnTools.scmLanguage == 'ko' || config.svnTools.scmLanguage == 'default' && config.svnTools.language == 'ko') && scmProvider == svnTools && (scmResourceGroup == unversioned)"
         }
       ],
       "scm/resourceState/context": [
@@ -1086,84 +1019,84 @@
           "when": "(config.svnTools.scmLanguage == 'ko' || config.svnTools.scmLanguage == 'default' && config.svnTools.language == 'ko') && scmProvider == svnTools && (scmResourceState == changed)"
         },
         {
-          "command": "svnTools.stage.en",
+          "command": "svnTools.undoAdd.en",
+          "group": "inline@2",
+          "when": "(config.svnTools.scmLanguage == 'en' || config.svnTools.scmLanguage == 'default' && config.svnTools.language == 'en') && scmProvider == svnTools && (scmResourceState == added)"
+        },
+        {
+          "command": "svnTools.undoAdd.ko",
+          "group": "inline@2",
+          "when": "(config.svnTools.scmLanguage == 'ko' || config.svnTools.scmLanguage == 'default' && config.svnTools.language == 'ko') && scmProvider == svnTools && (scmResourceState == added)"
+        },
+        {
+          "command": "svnTools.add.en",
           "group": "inline@3",
-          "when": "(config.svnTools.scmLanguage == 'en' || config.svnTools.scmLanguage == 'default' && config.svnTools.language == 'en') && scmProvider == svnTools && (scmResourceState == changed || scmResourceState == unversioned)"
+          "when": "(config.svnTools.scmLanguage == 'en' || config.svnTools.scmLanguage == 'default' && config.svnTools.language == 'en') && scmProvider == svnTools && (scmResourceState == unversioned)"
         },
         {
-          "command": "svnTools.stage.ko",
+          "command": "svnTools.add.ko",
           "group": "inline@3",
-          "when": "(config.svnTools.scmLanguage == 'ko' || config.svnTools.scmLanguage == 'default' && config.svnTools.language == 'ko') && scmProvider == svnTools && (scmResourceState == changed || scmResourceState == unversioned)"
+          "when": "(config.svnTools.scmLanguage == 'ko' || config.svnTools.scmLanguage == 'default' && config.svnTools.language == 'ko') && scmProvider == svnTools && (scmResourceState == unversioned)"
         },
         {
-          "command": "svnTools.unstage.en",
-          "group": "inline@3",
-          "when": "(config.svnTools.scmLanguage == 'en' || config.svnTools.scmLanguage == 'default' && config.svnTools.language == 'en') && scmProvider == svnTools && (scmResourceState == staged)"
+          "command": "svnTools.add.en",
+          "group": "1_add@1",
+          "when": "(config.svnTools.scmLanguage == 'en' || config.svnTools.scmLanguage == 'default' && config.svnTools.language == 'en') && scmProvider == svnTools && (scmResourceState == unversioned)"
         },
         {
-          "command": "svnTools.unstage.ko",
-          "group": "inline@3",
-          "when": "(config.svnTools.scmLanguage == 'ko' || config.svnTools.scmLanguage == 'default' && config.svnTools.language == 'ko') && scmProvider == svnTools && (scmResourceState == staged)"
-        },
-        {
-          "command": "svnTools.stage.en",
-          "group": "1_stage@1",
-          "when": "(config.svnTools.scmLanguage == 'en' || config.svnTools.scmLanguage == 'default' && config.svnTools.language == 'en') && scmProvider == svnTools && (scmResourceState == changed || scmResourceState == unversioned)"
-        },
-        {
-          "command": "svnTools.stage.ko",
-          "group": "1_stage@1",
-          "when": "(config.svnTools.scmLanguage == 'ko' || config.svnTools.scmLanguage == 'default' && config.svnTools.language == 'ko') && scmProvider == svnTools && (scmResourceState == changed || scmResourceState == unversioned)"
-        },
-        {
-          "command": "svnTools.unstage.en",
-          "group": "1_stage@2",
-          "when": "(config.svnTools.scmLanguage == 'en' || config.svnTools.scmLanguage == 'default' && config.svnTools.language == 'en') && scmProvider == svnTools && (scmResourceState == staged)"
-        },
-        {
-          "command": "svnTools.unstage.ko",
-          "group": "1_stage@2",
-          "when": "(config.svnTools.scmLanguage == 'ko' || config.svnTools.scmLanguage == 'default' && config.svnTools.language == 'ko') && scmProvider == svnTools && (scmResourceState == staged)"
+          "command": "svnTools.add.ko",
+          "group": "1_add@1",
+          "when": "(config.svnTools.scmLanguage == 'ko' || config.svnTools.scmLanguage == 'default' && config.svnTools.language == 'ko') && scmProvider == svnTools && (scmResourceState == unversioned)"
         },
         {
           "command": "svnTools.diff.en",
           "group": "2_view@1",
-          "when": "(config.svnTools.scmLanguage == 'en' || config.svnTools.scmLanguage == 'default' && config.svnTools.language == 'en') && scmProvider == svnTools && (scmResourceState == changed || scmResourceState == staged)"
+          "when": "(config.svnTools.scmLanguage == 'en' || config.svnTools.scmLanguage == 'default' && config.svnTools.language == 'en') && scmProvider == svnTools && (scmResourceState == changed)"
         },
         {
           "command": "svnTools.diff.ko",
           "group": "2_view@1",
-          "when": "(config.svnTools.scmLanguage == 'ko' || config.svnTools.scmLanguage == 'default' && config.svnTools.language == 'ko') && scmProvider == svnTools && (scmResourceState == changed || scmResourceState == staged)"
+          "when": "(config.svnTools.scmLanguage == 'ko' || config.svnTools.scmLanguage == 'default' && config.svnTools.language == 'ko') && scmProvider == svnTools && (scmResourceState == changed)"
         },
         {
           "command": "svnTools.diffRevision.en",
           "group": "2_view@2",
-          "when": "(config.svnTools.scmLanguage == 'en' || config.svnTools.scmLanguage == 'default' && config.svnTools.language == 'en') && scmProvider == svnTools && (scmResourceState == changed || scmResourceState == staged)"
+          "when": "(config.svnTools.scmLanguage == 'en' || config.svnTools.scmLanguage == 'default' && config.svnTools.language == 'en') && scmProvider == svnTools && (scmResourceState == changed)"
         },
         {
           "command": "svnTools.diffRevision.ko",
           "group": "2_view@2",
-          "when": "(config.svnTools.scmLanguage == 'ko' || config.svnTools.scmLanguage == 'default' && config.svnTools.language == 'ko') && scmProvider == svnTools && (scmResourceState == changed || scmResourceState == staged)"
+          "when": "(config.svnTools.scmLanguage == 'ko' || config.svnTools.scmLanguage == 'default' && config.svnTools.language == 'ko') && scmProvider == svnTools && (scmResourceState == changed)"
         },
         {
           "command": "svnTools.log.en",
           "group": "2_view@3",
-          "when": "(config.svnTools.scmLanguage == 'en' || config.svnTools.scmLanguage == 'default' && config.svnTools.language == 'en') && scmProvider == svnTools && (scmResourceState == changed || scmResourceState == staged)"
+          "when": "(config.svnTools.scmLanguage == 'en' || config.svnTools.scmLanguage == 'default' && config.svnTools.language == 'en') && scmProvider == svnTools && (scmResourceState == changed)"
         },
         {
           "command": "svnTools.log.ko",
           "group": "2_view@3",
-          "when": "(config.svnTools.scmLanguage == 'ko' || config.svnTools.scmLanguage == 'default' && config.svnTools.language == 'ko') && scmProvider == svnTools && (scmResourceState == changed || scmResourceState == staged)"
+          "when": "(config.svnTools.scmLanguage == 'ko' || config.svnTools.scmLanguage == 'default' && config.svnTools.language == 'ko') && scmProvider == svnTools && (scmResourceState == changed)"
         },
         {
           "command": "svnTools.revert.en",
           "group": "3_edit@1",
-          "when": "(config.svnTools.scmLanguage == 'en' || config.svnTools.scmLanguage == 'default' && config.svnTools.language == 'en') && scmProvider == svnTools && (scmResourceState == changed || scmResourceState == staged)"
+          "when": "(config.svnTools.scmLanguage == 'en' || config.svnTools.scmLanguage == 'default' && config.svnTools.language == 'en') && scmProvider == svnTools && (scmResourceState == changed)"
         },
         {
           "command": "svnTools.revert.ko",
           "group": "3_edit@1",
-          "when": "(config.svnTools.scmLanguage == 'ko' || config.svnTools.scmLanguage == 'default' && config.svnTools.language == 'ko') && scmProvider == svnTools && (scmResourceState == changed || scmResourceState == staged)"
+          "when": "(config.svnTools.scmLanguage == 'ko' || config.svnTools.scmLanguage == 'default' && config.svnTools.language == 'ko') && scmProvider == svnTools && (scmResourceState == changed)"
+        },
+        {
+          "command": "svnTools.undoAdd.en",
+          "group": "3_edit@1",
+          "when": "(config.svnTools.scmLanguage == 'en' || config.svnTools.scmLanguage == 'default' && config.svnTools.language == 'en') && scmProvider == svnTools && (scmResourceState == added)"
+        },
+        {
+          "command": "svnTools.undoAdd.ko",
+          "group": "3_edit@1",
+          "when": "(config.svnTools.scmLanguage == 'ko' || config.svnTools.scmLanguage == 'default' && config.svnTools.language == 'ko') && scmProvider == svnTools && (scmResourceState == added)"
         },
         {
           "command": "svnTools.resolve.en",
@@ -1178,12 +1111,12 @@
         {
           "submenu": "svnTools.delete.en",
           "group": "3_edit@3",
-          "when": "(config.svnTools.scmLanguage == 'en' || config.svnTools.scmLanguage == 'default' && config.svnTools.language == 'en') && scmProvider == svnTools && (scmResourceState == changed || scmResourceState == staged)"
+          "when": "(config.svnTools.scmLanguage == 'en' || config.svnTools.scmLanguage == 'default' && config.svnTools.language == 'en') && scmProvider == svnTools && (scmResourceState == changed || scmResourceState == added)"
         },
         {
           "submenu": "svnTools.delete.ko",
           "group": "3_edit@3",
-          "when": "(config.svnTools.scmLanguage == 'ko' || config.svnTools.scmLanguage == 'default' && config.svnTools.language == 'ko') && scmProvider == svnTools && (scmResourceState == changed || scmResourceState == staged)"
+          "when": "(config.svnTools.scmLanguage == 'ko' || config.svnTools.scmLanguage == 'default' && config.svnTools.language == 'ko') && scmProvider == svnTools && (scmResourceState == changed || scmResourceState == added)"
         },
         {
           "command": "svnTools.ignore.en",
@@ -1204,6 +1137,68 @@
           "submenu": "svnTools.tortoise.ko",
           "group": "4_tortoise@1",
           "when": "(config.svnTools.scmLanguage == 'ko' || config.svnTools.scmLanguage == 'default' && config.svnTools.language == 'ko') && scmProvider == svnTools"
+        }
+      ],
+      "webview/context": [
+        {
+          "command": "svnTools.applyRename.en",
+          "group": "0_rename@1",
+          "when": "(config.svnTools.messageLanguage == 'en' || config.svnTools.messageLanguage == 'default' && config.svnTools.language == 'en') && webviewId == 'svnTools.commit' && svnRenamable"
+        },
+        {
+          "command": "svnTools.applyRename.ko",
+          "group": "0_rename@1",
+          "when": "(config.svnTools.messageLanguage == 'ko' || config.svnTools.messageLanguage == 'default' && config.svnTools.language == 'ko') && webviewId == 'svnTools.commit' && svnRenamable"
+        },
+        {
+          "command": "svnTools.diff.en",
+          "group": "1_view@1",
+          "when": "(config.svnTools.messageLanguage == 'en' || config.svnTools.messageLanguage == 'default' && config.svnTools.language == 'en') && webviewId == 'svnTools.commit' && svnKind == 'change' && svnCode =~ /^[MR]$/"
+        },
+        {
+          "command": "svnTools.diff.ko",
+          "group": "1_view@1",
+          "when": "(config.svnTools.messageLanguage == 'ko' || config.svnTools.messageLanguage == 'default' && config.svnTools.language == 'ko') && webviewId == 'svnTools.commit' && svnKind == 'change' && svnCode =~ /^[MR]$/"
+        },
+        {
+          "command": "svnTools.openFile.en",
+          "group": "1_view@2",
+          "when": "(config.svnTools.messageLanguage == 'en' || config.svnTools.messageLanguage == 'default' && config.svnTools.language == 'en') && webviewId == 'svnTools.commit' && svnPath"
+        },
+        {
+          "command": "svnTools.openFile.ko",
+          "group": "1_view@2",
+          "when": "(config.svnTools.messageLanguage == 'ko' || config.svnTools.messageLanguage == 'default' && config.svnTools.language == 'ko') && webviewId == 'svnTools.commit' && svnPath"
+        },
+        {
+          "command": "svnTools.log.en",
+          "group": "1_view@3",
+          "when": "(config.svnTools.messageLanguage == 'en' || config.svnTools.messageLanguage == 'default' && config.svnTools.language == 'en') && webviewId == 'svnTools.commit' && svnKind == 'change' && svnCode != 'A'"
+        },
+        {
+          "command": "svnTools.log.ko",
+          "group": "1_view@3",
+          "when": "(config.svnTools.messageLanguage == 'ko' || config.svnTools.messageLanguage == 'default' && config.svnTools.language == 'ko') && webviewId == 'svnTools.commit' && svnKind == 'change' && svnCode != 'A'"
+        },
+        {
+          "command": "svnTools.ignore.en",
+          "group": "2_edit@1",
+          "when": "(config.svnTools.messageLanguage == 'en' || config.svnTools.messageLanguage == 'default' && config.svnTools.language == 'en') && webviewId == 'svnTools.commit' && svnKind == 'unversioned'"
+        },
+        {
+          "command": "svnTools.ignore.ko",
+          "group": "2_edit@1",
+          "when": "(config.svnTools.messageLanguage == 'ko' || config.svnTools.messageLanguage == 'default' && config.svnTools.language == 'ko') && webviewId == 'svnTools.commit' && svnKind == 'unversioned'"
+        },
+        {
+          "command": "svnTools.revert.en",
+          "group": "2_edit@2",
+          "when": "(config.svnTools.messageLanguage == 'en' || config.svnTools.messageLanguage == 'default' && config.svnTools.language == 'en') && webviewId == 'svnTools.commit' && svnKind == 'change'"
+        },
+        {
+          "command": "svnTools.revert.ko",
+          "group": "2_edit@2",
+          "when": "(config.svnTools.messageLanguage == 'ko' || config.svnTools.messageLanguage == 'default' && config.svnTools.language == 'ko') && webviewId == 'svnTools.commit' && svnKind == 'change'"
         }
       ],
       "view/title": [
@@ -1280,28 +1275,12 @@
           "when": "false"
         },
         {
-          "command": "svnTools.stage.en",
+          "command": "svnTools.addAll.en",
           "when": "(config.svnTools.menuLanguage == 'en' || config.svnTools.menuLanguage == 'default' && config.svnTools.language == 'en') && svnTools.active"
         },
         {
-          "command": "svnTools.stageInclude.en",
+          "command": "svnTools.undoAdd.en",
           "when": "false"
-        },
-        {
-          "command": "svnTools.stageExclude.en",
-          "when": "false"
-        },
-        {
-          "command": "svnTools.unstage.en",
-          "when": "(config.svnTools.menuLanguage == 'en' || config.svnTools.menuLanguage == 'default' && config.svnTools.language == 'en') && svnTools.active"
-        },
-        {
-          "command": "svnTools.stageAll.en",
-          "when": "(config.svnTools.menuLanguage == 'en' || config.svnTools.menuLanguage == 'default' && config.svnTools.language == 'en') && svnTools.active"
-        },
-        {
-          "command": "svnTools.unstageAll.en",
-          "when": "(config.svnTools.menuLanguage == 'en' || config.svnTools.menuLanguage == 'default' && config.svnTools.language == 'en') && svnTools.active"
         },
         {
           "command": "svnTools.ignore.en",
@@ -1361,7 +1340,11 @@
         },
         {
           "command": "svnTools.resolve.en",
-          "when": "false"
+          "when": "(config.svnTools.menuLanguage == 'en' || config.svnTools.menuLanguage == 'default' && config.svnTools.language == 'en') && svnTools.active"
+        },
+        {
+          "command": "svnTools.markResolved.en",
+          "when": "(config.svnTools.menuLanguage == 'en' || config.svnTools.menuLanguage == 'default' && config.svnTools.language == 'en') && svnTools.active"
         },
         {
           "command": "svnTools.cleanup.en",
@@ -1496,28 +1479,12 @@
           "when": "false"
         },
         {
-          "command": "svnTools.stage.ko",
+          "command": "svnTools.addAll.ko",
           "when": "(config.svnTools.menuLanguage == 'ko' || config.svnTools.menuLanguage == 'default' && config.svnTools.language == 'ko') && svnTools.active"
         },
         {
-          "command": "svnTools.stageInclude.ko",
+          "command": "svnTools.undoAdd.ko",
           "when": "false"
-        },
-        {
-          "command": "svnTools.stageExclude.ko",
-          "when": "false"
-        },
-        {
-          "command": "svnTools.unstage.ko",
-          "when": "(config.svnTools.menuLanguage == 'ko' || config.svnTools.menuLanguage == 'default' && config.svnTools.language == 'ko') && svnTools.active"
-        },
-        {
-          "command": "svnTools.stageAll.ko",
-          "when": "(config.svnTools.menuLanguage == 'ko' || config.svnTools.menuLanguage == 'default' && config.svnTools.language == 'ko') && svnTools.active"
-        },
-        {
-          "command": "svnTools.unstageAll.ko",
-          "when": "(config.svnTools.menuLanguage == 'ko' || config.svnTools.menuLanguage == 'default' && config.svnTools.language == 'ko') && svnTools.active"
         },
         {
           "command": "svnTools.ignore.ko",
@@ -1577,7 +1544,11 @@
         },
         {
           "command": "svnTools.resolve.ko",
-          "when": "false"
+          "when": "(config.svnTools.menuLanguage == 'ko' || config.svnTools.menuLanguage == 'default' && config.svnTools.language == 'ko') && svnTools.active"
+        },
+        {
+          "command": "svnTools.markResolved.ko",
+          "when": "(config.svnTools.menuLanguage == 'ko' || config.svnTools.menuLanguage == 'default' && config.svnTools.language == 'ko') && svnTools.active"
         },
         {
           "command": "svnTools.cleanup.ko",
@@ -1714,10 +1685,6 @@
           "group": "3_edit@3"
         },
         {
-          "command": "svnTools.resolve.en",
-          "group": "3_edit@4"
-        },
-        {
           "command": "svnTools.ignoreReason.en",
           "group": "4_ignore@1"
         },
@@ -1840,16 +1807,6 @@
           "group": "1@2"
         }
       ],
-      "svnTools.stageMenu.en": [
-        {
-          "command": "svnTools.stageInclude.en",
-          "group": "1@1"
-        },
-        {
-          "command": "svnTools.stageExclude.en",
-          "group": "1@2"
-        }
-      ],
       "svnTools.svn.ko": [
         {
           "command": "svnTools.commit.ko",
@@ -1878,10 +1835,6 @@
         {
           "command": "svnTools.revert.ko",
           "group": "3_edit@3"
-        },
-        {
-          "command": "svnTools.resolve.ko",
-          "group": "3_edit@4"
         },
         {
           "command": "svnTools.ignoreReason.ko",
@@ -2005,16 +1958,6 @@
           "command": "svnTools.addExclude.ko",
           "group": "1@2"
         }
-      ],
-      "svnTools.stageMenu.ko": [
-        {
-          "command": "svnTools.stageInclude.ko",
-          "group": "1@1"
-        },
-        {
-          "command": "svnTools.stageExclude.ko",
-          "group": "1@2"
-        }
       ]
     },
     "views": {
@@ -2030,21 +1973,6 @@
       {
         "title": "SVN Tools",
         "properties": {
-          "svnTools.commit.smartCommit": {
-            "type": "string",
-            "enum": [
-              "ask",
-              "always",
-              "never"
-            ],
-            "default": "ask",
-            "enumDescriptions": [
-              "물어본다 / Ask",
-              "항상 변경을 모두 스테이징하고 이어서 커밋 / Always stage all changes and continue",
-              "스테이징하지 않는다 / Never"
-            ],
-            "markdownDescription": "스테이징된 변경이 없을 때 Commit을 누르면. 확인 창의 \"다시 묻지 않음\"은 `never`로 바꾼다.\n\nWhen committing with nothing staged. \"Never\" in the dialog sets this to `never`."
-          },
           "svnTools.rename.askOnRename": {
             "type": "boolean",
             "default": true,
@@ -2060,11 +1988,6 @@
             "default": 5,
             "minimum": 1,
             "description": "SVN 이력 칸 자동 확인 간격(분). 자동 확인이 켜져 있을 때 쓴다 / Minutes between checks, when automatic check is on"
-          },
-          "svnTools.commit.review": {
-            "type": "boolean",
-            "default": true,
-            "description": "커밋 확인 탭 사용: 커밋 직전에 메시지와 올라갈 항목을 한 번 더 보여 준다 / Use the commit review tab: show the message and items right before committing"
           },
           "svnTools.commit.checkOutOfDate": {
             "type": "boolean",
@@ -2124,7 +2047,7 @@
               "English",
               "한국어"
             ],
-            "markdownDescription": "└ **우클릭 메뉴 언어** — 탐색기·편집기 탭 우클릭의 SVN Add / SVN Stage 등과 SVN ▸, TortoiseSVN ▸ 하위 메뉴, 명령 팔레트(Ctrl+Shift+P)의 명령 이름.\n\n└ **Context menu language** — SVN items and the SVN ▸ / TortoiseSVN ▸ submenus in the explorer and editor tab context menus, and command names in the Command Palette."
+            "markdownDescription": "└ **우클릭 메뉴 언어** — 탐색기·편집기 탭 우클릭의 SVN Add / SVN Ignore… 등과 SVN ▸, TortoiseSVN ▸ 하위 메뉴, 명령 팔레트(Ctrl+Shift+P)의 명령 이름.\n\n└ **Context menu language** — SVN items and the SVN ▸ / TortoiseSVN ▸ submenus in the explorer and editor tab context menus, and command names in the Command Palette."
           },
           "svnTools.scmLanguage": {
             "type": "string",
@@ -2140,7 +2063,7 @@
               "English",
               "한국어"
             ],
-            "markdownDescription": "└ **Source Control 패널 언어** — 그룹 이름(Staged Changes / Changes …), 패널 위쪽·항목 옆 버튼과 패널 우클릭 메뉴, 커밋 메시지 입력칸의 안내 문구.\n\n└ **Source Control panel language** — group names, the buttons and context menus in the panel, and the commit message hint."
+            "markdownDescription": "└ **Source Control 패널 언어** — 그룹 이름(Modified / Unversioned …), 패널 위쪽·항목 옆 버튼과 패널 우클릭 메뉴, SVN 칸의 커밋 버튼, 상태 표시줄 버튼, SVN 이력 칸.\n\n└ **Source Control panel language** — group names, the buttons and context menus in the panel, and the SVN History view."
           },
           "svnTools.messageLanguage": {
             "type": "string",
@@ -2156,7 +2079,7 @@
               "English",
               "한국어"
             ],
-            "markdownDescription": "└ **알림·창 언어** — 오른쪽 아래 알림, 확인 창, 입력·선택 창, 무시 목록 편집·무시된 원인·커밋 확인 탭, 탐색기 상태 툴팁.\n\n└ **Notification and view language** — notifications, dialogs, input and pick boxes, the ignore list / ignore reason / commit review tabs, and explorer status tooltips."
+            "markdownDescription": "└ **알림·창 언어** — 오른쪽 아래 알림, 확인 창, 입력·선택 창, 무시 목록 편집·무시된 원인·커밋 탭(우클릭 메뉴 포함), 탐색기 상태 툴팁.\n\n└ **Notification and view language** — notifications, dialogs, input and pick boxes, the ignore list / ignore reason / commit review tabs, and explorer status tooltips."
           }
         }
       }

@@ -9,7 +9,7 @@ const ignore = require('./ignore');
 const tortoise = require('./tortoise');
 const conflict = require('./conflict');
 const { t } = require('./i18n');
-const { baseUri, isInside, key, isPlainAdd, hitAncestor } = require('./repository');
+const { baseUri, isInside, key, isConflict, isPlainAdd } = require('./repository');
 const { IgnoreView } = require('./ignoreView');
 const { ReasonView } = require('./reasonView');
 const { ColorView } = require('./colorView');
@@ -20,9 +20,10 @@ function createCommands(ctx) {
 
   // 명령마다 들어오는 인자 모양이 달라서 경로 목록 하나로 맞춘다.
   //   탐색기: (uri, uris[]) / 패널 파일: (state, state, ...) 또는 (state, states[])
-  //   패널 그룹: (group) / 패널 상단: (sourceControl) / 팔레트: () → 열린 편집기 파일
+  //   패널 그룹: (group) / 패널 상단: (sourceControl) / 커밋 탭 우클릭: ({ svnPath, ... }) / 팔레트: () → 열린 편집기 파일
   function toUris(args) {
     const [first, second] = args;
+    if (first && typeof first.svnPath === 'string') return [vscode.Uri.file(first.svnPath)];
     if (first instanceof vscode.Uri) {
       if (Array.isArray(second) && second.length > 0 && second[0] instanceof vscode.Uri) return second;
       return [first];
@@ -44,7 +45,7 @@ function createCommands(ctx) {
   }
 
   // 명령이 다룬 저장소. 명령이 끝나면 이 저장소만 새로고침한다(작업 폴더가 여럿이어도 전부 돌리지 않게). 하나도 없으면 전부.
-  // 명령마다 따로 모은다(AsyncLocalStorage) — 커밋 확인 탭처럼 오래 떠 있는 명령이 다른 명령의 새로고침을 미루지 않게.
+  // 명령마다 따로 모은다(AsyncLocalStorage) — 커밋 탭처럼 오래 떠 있는 명령이 다른 명령의 새로고침을 미루지 않게.
   const scope = new AsyncLocalStorage();
   const use = (repo) => {
     const used = scope.getStore();
@@ -141,20 +142,15 @@ function createCommands(ctx) {
 
   // ---- 커밋 ----
 
-  async function askMessage(repo) {
-    const preset = repo ? repo.sourceControl.inputBox.value : '';
-    return vscode.window.showInputBox({ prompt: t('commitInputPrompt'), value: preset, ignoreFocusOut: true });
-  }
-
   // 커밋하려는 경로들의 상위 폴더 중 "새로 추가됐는데(A) 목록에 없는" 폴더. svn은 상위 폴더가 함께 커밋되지 않으면
-  // 그 안의 항목을 올리지 못한다(E200009). 미등록(?) 상위 폴더도 함께 돌려준다(스테이징할 때 add --parents로 추가된다).
+  // 그 안의 항목을 올리지 못한다(E200009). 미등록(?) 상위 폴더도 함께 돌려준다(커밋 전에 add --parents로 추가된다).
   function newParents(repo, list) {
     const inList = new Set(list.map(key));
     const found = new Map();
     for (const p of list) {
       for (let cur = path.dirname(p); isInside(cur, repo.wcRoot) && key(cur) !== key(repo.wcRoot); cur = path.dirname(cur)) {
         const code = repo.statusOf(cur);
-        const isNew = code === 'A' || code === '?' || (code === undefined && repo.isUnversioned(cur));
+        const isNew = code === 'A' || code === 'R' || code === '?' || (code === undefined && repo.isUnversioned(cur));
         if (!isNew) break;
         if (!inList.has(key(cur))) found.set(key(cur), cur);
       }
@@ -162,7 +158,7 @@ function createCommands(ctx) {
     return [...found.values()];
   }
 
-  // 폴더를 "하위 항목 포함"으로 정확히 커밋·스테이징할 때: 폴더 자신(변경이 있으면) + 그 아래 변경 항목 전부.
+  // 폴더 자신(변경이 있으면) + 그 아래 변경 항목 전부. 미등록 폴더를 add한 뒤 안의 새 항목을 커밋에 넣을 때 쓴다.
   function changedInside(repo, dir) {
     return [...repo.statuses.values()]
       .filter((s) => !['?', 'C', '~', 'N'].includes(s.code) && isInside(s.path, dir))
@@ -191,15 +187,90 @@ function createCommands(ctx) {
     return [...out.values()];
   }
 
+  // 커밋 탭에 보일 항목. 충돌·덜 받은 항목은 커밋할 수 없어 빼고 안내만 한다.
+  // 이동(이름 바꾸기)은 새 경로 한 줄로 보이고, 옛 경로(D)는 커밋할 때 closure가 함께 넣는다.
+  // requires: 이 항목을 올리려면 함께 올라가야 하는 새 상위 폴더(웹뷰가 자동으로 켠다).
+  // def: 처음 체크 상태. 범위(scope, 탐색기에서 고른 것)가 없으면 관리 중인 변경 전부, 있으면 그 안의 것만.
+  function commitItems(repo, scope) {
+    const items = [];
+    let skipped = 0;
+    const NEW = ['A', 'R', '?'];
+    for (const s of repo.statuses.values()) {
+      if (isConflict(s.code) || s.code === 'N') {
+        skipped++;
+        continue;
+      }
+      if (s.code === '?' && repo.isLeftover(s.path)) continue;
+      if (s.code === 'D' && s.movedTo && repo.entry(s.movedTo)) continue;
+      const requires = [];
+      for (let cur = path.dirname(s.path); repo.contains(cur) && key(cur) !== repo.folderKey; cur = path.dirname(cur)) {
+        const e = repo.entry(cur);
+        if (!e || !NEW.includes(e.code)) break;
+        requires.push(cur);
+      }
+      const unversioned = s.code === '?';
+      let def = !unversioned;
+      if (scope) def = unversioned ? scope.some((sel) => isInside(sel, s.path)) : scope.some((sel) => isInside(s.path, sel));
+      items.push({
+        path: s.path,
+        rel: path.relative(repo.folder, s.path) || '.',
+        code: s.code,
+        unversioned,
+        dir: unversioned && isDir(s.path),
+        props: s.code === 'M' && isDir(s.path),
+        movedFrom: s.movedFrom ? path.relative(repo.folder, s.movedFrom) : undefined,
+        renamable: unversioned && !!repo.renameOf(s.path),
+        requires,
+        def,
+      });
+    }
+    return { items, note: skipped ? t('reviewSkippedNote', skipped) : '' };
+  }
+
+  // 커밋 탭을 연다. scope: 탐색기에서 고른 경로(그 안의 것만 처음에 체크). 없으면 변경 전부.
+  async function openCommit(repo, scope) {
+    await repo.refresh();
+    const first = commitItems(repo, scope);
+    if (first.items.length === 0 || (scope && !first.items.some((x) => x.def))) {
+      return vscode.window.showInformationMessage(first.note || t('commitNothing'));
+    }
+    // 웹뷰가 고른 경로로 커밋할 경로를 정한다(상태는 CommitView가 방금 다시 읽었다).
+    // 끈 항목이 남은 항목과 함께 올라가야 하면(이동 짝·새 상위 폴더) 조용히 넣지 않고 알린다.
+    const validate = (paths) => {
+      const shown = new Map(commitItems(repo, scope).items.map((x) => [key(x.path), x]));
+      const chosen = paths.map((p) => shown.get(key(p))).filter(Boolean);
+      if (chosen.length === 0) return { error: t('reviewNoItems') };
+      const on = new Set(chosen.map((x) => key(x.path)));
+      const all = closure(repo, chosen.map((x) => x.path), true);
+      const revived = all.filter((p) => shown.has(key(p)) && !on.has(key(p)));
+      if (revived.length) return { error: t('reviewRevived', revived.map((p) => path.relative(repo.folder, p) || p).join(', ')) };
+      return { paths: all, add: chosen.filter((x) => x.unversioned).map((x) => x.path) };
+    };
+    const r = await CommitView.open(repo, { build: () => commitItems(repo, scope), validate });
+    if (!r) return;
+    let targets = r.paths;
+    if (r.add.length) {
+      // svn은 이름을 직접 준 항목이면 무시 규칙에 걸려 있어도 추가한다(테스트로 확인). --no-ignore를 붙이면
+      // 고른 폴더 안의 무시 대상(__pycache__ 등)까지 전부 추가되므로 붙이지 않는다 — 안쪽은 무시 규칙을 따른다.
+      await step('add', () => svn.exec(['add', '--force', '--parents', ...r.add], repo.folder));
+      await repo.refresh();
+      // 폴더를 add하면 안의 항목도 A가 된다. --depth empty 커밋은 폴더 자신만 올리므로 안의 항목을 넣는다.
+      const inner = r.add.filter(isDir).flatMap((d) => changedInside(repo, d));
+      targets = [...new Map([...targets, ...inner].map((p) => [key(p), p])).values()];
+    }
+    // 올릴 것이 연 폴더 안의 변경 전부면 작업 폴더 하나를 기본 깊이로 넘긴다(항목이 많아도 명령줄이 길어지지 않는다).
+    // 잠근(svn lock) 파일이 있으면 폴더 커밋이 수정하지 않은 파일의 잠금까지 풀어서(검토로 재현) 항목별로 넘긴다.
+    const chosen = new Set(targets.map(key));
+    const covers = targets.every((p) => repo.contains(p))
+      && [...repo.statuses.values()].every((s) => s.code === '?' || chosen.has(key(s.path)))
+      && !repo.hasLocks();
+    await commitPaths(repo, covers ? [repo.folder] : targets, r.message, !covers);
+  }
+
   // 커밋. exact=true면 targets만 정확히(--depth empty) 올리고, false면 targets를 기본 깊이로 넘긴다(폴더는 하위 전체).
   // 누락 파일 처리 → 서버 변경 확인 → 커밋 순서.
-  // committed: 커밋 뒤 스테이징에서 뺄 경로(작업 폴더 하나로 커밋할 때는 targets와 다르다)
-  async function commitPaths(repo, targets, message, exact, committed = targets) {
-    if (!message || !message.trim()) {
-      vscode.window.showWarningMessage(t('commitEmptyMessage'));
-      return false;
-    }
-    // 상태는 부르는 쪽(review)이 방금 다시 읽었다.
+  // 빈 메시지는 커밋 탭이 이미 확인을 받았다.
+  async function commitPaths(repo, targets, message, exact) {
     const targetKeys = new Set(targets.map(key));
     const inScope = [...repo.statuses.values()]
       .filter((s) => (exact ? targetKeys.has(key(s.path)) : targets.some((p) => isInside(s.path, p))));
@@ -216,7 +287,7 @@ function createCommands(ctx) {
       return false;
     }
     // svn은 충돌 상태 항목의 커밋을 거부한다(E155015). 해결 메뉴로 바로 이어 준다.
-    const conflicted = committable.filter((s) => s.code === 'C' || s.code === '~');
+    const conflicted = committable.filter((s) => isConflict(s.code));
     if (conflicted.length) {
       const resolveNow = t('commitConflictsResolve');
       const pick = await vscode.window.showWarningMessage(t('commitConflicts', conflicted.length), resolveNow);
@@ -226,11 +297,9 @@ function createCommands(ctx) {
       }
       return false;
     }
+    // 누락(!)은 삭제로 예약해야 커밋된다. 커밋 탭에서 "누락 — 삭제로 커밋"을 보고 골랐으므로 다시 묻지 않는다.
     const missing = committable.filter((s) => s.code === '!');
-    if (missing.length > 0) {
-      if (!(await confirm(t('commitMissingAsk', missing.length), t('commitMissingYes')))) return false;
-      await svn.exec(['delete', ...missing.map((s) => s.path)], repo.folder);
-    }
+    if (missing.length > 0) await svn.exec(['delete', ...missing.map((s) => s.path)], repo.folder);
 
     if (vscode.workspace.getConfiguration('svnTools').get('commit.checkOutOfDate', true)) {
       const outdated = await outOfDateCount(repo, targets);
@@ -243,7 +312,7 @@ function createCommands(ctx) {
         if (pick === updateFirst) {
           await runUpdate(repo, targets);
           await repo.refresh();
-          if ([...repo.statuses.values()].some((s) => s.code === 'C' || s.code === '~')) {
+          if ([...repo.statuses.values()].some((s) => isConflict(s.code))) {
             vscode.window.showWarningMessage(t('updateConflicts', repo.conflicts.label));
             return false;
           }
@@ -257,136 +326,11 @@ function createCommands(ctx) {
     const { stdout } = await step('commit', () =>
       svn.exec(['commit', '-m', message, '--force-log', ...depth, ...targets], repo.folder));
     ctx.output.appendLine(stdout);
-    repo.sourceControl.inputBox.value = '';
-    repo.unstage(committed);
+    repo.draft = '';
     const rev = svn.lastRevision(stdout);
     vscode.window.showInformationMessage(rev ? t('commitDone', rev) : t('commitDoneNoRev'));
     ctx.history.refresh(repo);
     return true;
-  }
-
-  // 커밋 직전 확인. 설정(svnTools.commit.review)이 켜져 있으면 커밋 확인 탭, 꺼져 있으면 메시지 입력과 "함께 올라갈 항목" 확인 창.
-  //   plan(): 지금 상태로 { picked(올리려고 고른 항목), extras(함께 올라가야 하는 항목 — 탭에서 끌 수 없다) }를 만든다.
-  //   탭의 [커밋]을 누르면 상태를 다시 읽고 plan()을 다시 만들어 검증한다(탭을 연 사이 밖에서 바뀐 것을 커밋하지 않게).
-  //   반환: { message, paths, all(고른 것을 하나도 빼지 않았는지) } 또는 취소면 undefined
-  async function review(repo, message, plan) {
-    let current = plan();
-    if (vscode.workspace.getConfiguration('svnTools').get('commit.review', true)) {
-      const itemsOf = ({ picked, extras }) => [
-        ...picked.map((p) => ({ path: p, code: repo.statusOf(p) || '', locked: false, pair: repo.movePair(p) })),
-        ...extras.map((p) => ({ path: p, code: repo.statusOf(p) || '', locked: true })),
-      ];
-      const sameList = (a, b) => a.length === b.length && a.every((x, i) => key(x) === key(b[i]));
-      let all = true;
-      const validate = async (checked) => {
-        await repo.refresh();
-        const fresh = plan();
-        if (!sameList(fresh.picked, current.picked) || !sameList(fresh.extras, current.extras)) {
-          current = fresh;
-          if (fresh.picked.length === 0) return { error: t('reviewNothingNow'), items: [] };
-          return { error: t('reviewChanged'), items: itemsOf(fresh) };
-        }
-        const on = new Set(checked.map(key));
-        const pickedOn = current.picked.filter((p) => on.has(key(p)));
-        if (pickedOn.length === 0) return { error: t('reviewNoItems') };
-        all = pickedOn.length === current.picked.length;
-        if (all) return { paths: [...current.picked, ...current.extras] };
-        // 끈 항목이 남은 항목과 함께 올라가야 하는 것(이동의 반대쪽, 새 상위 폴더)이면 뺄 수 없다 — 조용히 넣지 않고 알린다.
-        // 잠긴 항목은 남은 것 기준으로 다시 모은다(필요 없어진 새 상위 폴더가 혼자 올라가지 않게).
-        const paths = closure(repo, pickedOn, true);
-        const off = new Set(current.picked.filter((p) => !on.has(key(p))).map(key));
-        const revived = paths.filter((p) => off.has(key(p)));
-        if (revived.length) return { error: t('reviewRevived', revived.map((p) => path.relative(repo.folder, p) || p).join(', ')) };
-        return { paths };
-      };
-      const res = await CommitView.open(repo, message, itemsOf(current), validate);
-      if (!res) return undefined;
-      return { message: res.message, paths: res.paths, all };
-    }
-    if (!message.trim()) message = await askMessage(repo);
-    if (message === undefined) return undefined;
-    await repo.refresh();
-    current = plan();
-    if (current.picked.length === 0) {
-      vscode.window.showInformationMessage(t('commitNothing'));
-      return undefined;
-    }
-    if (current.extras.length) {
-      const detail = current.extras.map((p) => path.relative(repo.folder, p) || p).join('\n');
-      if (!(await confirm(t('commitParentsAsk', current.extras.length), t('commitParentsYes'), detail))) return undefined;
-    }
-    return { message, paths: [...current.picked, ...current.extras], all: true };
-  }
-
-  // 스테이징된 것만 커밋한다.
-  async function commitStaged(repo, message) {
-    const plan = () => {
-      const picked = repo.stagedPaths();
-      return { picked, extras: closure(repo, picked, true).slice(picked.length) };
-    };
-    const r = await review(repo, message, plan);
-    if (!r) return;
-    repo.stage(r.paths.filter((p) => repo.contains(p) && !repo.isStaged(p)));
-    // 올릴 것이 연 폴더 안의 변경 전부면 작업 폴더 하나를 기본 깊이로 넘긴다(항목이 많아도 명령줄이 길어지지 않는다).
-    // 판단은 review가 방금 다시 읽은 상태로 한다. 잠근(svn lock) 파일이 있으면 폴더 커밋이 수정하지 않은 파일의 잠금까지
-    // 풀어서(검토로 재현) 항목별로 넘긴다.
-    const chosen = new Set(r.paths.map(key));
-    const covers = r.paths.every((p) => repo.contains(p))
-      && [...repo.statuses.values()].every((s) => s.code === '?' || chosen.has(key(s.path)))
-      && !repo.hasLocks();
-    await commitPaths(repo, covers ? [repo.folder] : r.paths, r.message, !covers, r.paths);
-  }
-
-  // 탐색기 우클릭 SVN ▸ Commit…: 고른 것만 바로 커밋(스테이징을 거치지 않는다).
-  //   미등록·무시된 항목을 골랐으면 함께 추가할지 묻고, 새 상위 폴더가 있으면 각 폴더 자신만 함께 올린다.
-  async function quickCommit(args) {
-    let list = paths(args);
-    const repo = repoOfArgs(args, list);
-    if (!repo) return;
-    if (list.length === 0) list = [repo.folder];
-    await repo.refresh();
-    // 미등록 항목은 고른 것 자체가 미등록일 때만 뜻이 있다(관리 폴더 안의 미등록 파일만으로는 커밋할 것이 없다).
-    const listKeys = new Set(list.map(key));
-    const hasChange = [...repo.statuses.values()].some((s) => s.code !== '?' && hitAncestor(s.path, listKeys, ''));
-    if (!hasChange && !list.some((p) => repo.isUnversioned(p) || repo.statusOf(p) === 'I')) {
-      return vscode.window.showInformationMessage(t('commitNothing'));
-    }
-
-    const notVersioned = list.filter((p) => repo.isUnversioned(p) || repo.statusOf(p) === 'I');
-    if (notVersioned.length) {
-      const addYes = t('quickCommitAddYes');
-      const without = t('quickCommitWithout');
-      const detail = notVersioned.map((p) => path.relative(repo.folder, p) || p).join('\n');
-      const pick = await vscode.window.showWarningMessage(t('quickCommitUnversionedAsk', notVersioned.length),
-        { modal: true, detail }, addYes, without);
-      if (!pick) return;
-      if (pick === addYes) {
-        // svn은 이름을 직접 준 항목이면 무시 규칙에 걸려 있어도 추가한다(테스트로 확인). --no-ignore를 붙이면
-        // 고른 폴더 안의 무시 대상(__pycache__ 등)까지 전부 추가되므로 붙이지 않는다 — 안쪽은 무시 규칙을 따른다.
-        await step('add', () => svn.exec(['add', '--force', '--parents', ...notVersioned], repo.folder));
-        await repo.refresh();
-      } else {
-        list = list.filter((p) => !notVersioned.includes(p));
-        if (list.length === 0) return;
-      }
-    }
-
-    // 고른 것(폴더면 그 안의 변경까지)과 함께 올라가야 할 항목(새 상위 폴더, 이동의 반대쪽)이 고른 범위 밖에 있으면 함께 넣는다.
-    // 그대로면 고른 경로를 기본 깊이로 넘기고, 범위 밖 항목이 끼거나 탭에서 뺀 항목이 있으면 경로를 모두 풀어 --depth empty로 넘긴다.
-    let extrasNow = [];
-    const plan = () => {
-      const inner = new Map(list.map((p) => [key(p), p]));
-      for (const p of list) if (isDir(p)) for (const c of changedInside(repo, p)) inner.set(key(c), c);
-      const full = closure(repo, [...inner.values()], true);
-      extrasNow = full.filter((p) => !list.some((l) => isInside(p, l)));
-      const picked = [...inner.values()].filter((p) => !['?', 'I', undefined].includes(repo.statusOf(p)));
-      return { picked, extras: extrasNow };
-    };
-    const r = await review(repo, repo.sourceControl.inputBox.value, plan);
-    if (!r) return;
-    // 잠근 파일이 있으면 폴더째 넘기지 않는다 — 폴더 커밋은 그 아래 수정하지 않은 파일의 잠금까지 푼다.
-    if (r.all && extrasNow.length === 0 && !repo.hasLocks()) await commitPaths(repo, list, r.message, false);
-    else await commitPaths(repo, r.paths, r.message, true);
   }
 
   async function outOfDateCount(repo, targets) {
@@ -465,56 +409,21 @@ function createCommands(ctx) {
       t('diffRevWorking', path.basename(p), rev));
   }
 
-  // ---- 스테이징 ----
-  //   미등록 항목: svn add 후 스테이징 / 누락(!): svn delete 후 스테이징 / 그 밖의 변경: 스테이징만.
-  //   withContents: 폴더 안의 항목까지 포함할지. undefined면 폴더가 있을 때 물어본다(패널의 + 버튼).
-  //   새 상위 폴더(미등록이거나 추가됐는데 스테이징 안 된 것)가 있으면 안내하고, 승인하면 각 폴더 자신만 함께 스테이징한다.
+  // ---- 추가(svn add) ----
+  //   withContents: 폴더 안의 항목까지 추가할지(탐색기 SVN Add ▸에서 고른다).
 
-  async function chooseContents(list) {
-    if (!list.some(isDir)) return true;
-    const include = { label: t('stageIncludeContents'), value: true };
-    const exclude = { label: t('stageExcludeContents'), value: false };
-    const pick = await vscode.window.showQuickPick([include, exclude], { title: t('stagePickTitle') });
-    return pick ? pick.value : undefined;
-  }
-
-  // 스테이징·취소는 저장소별로 하나씩 차례로 처리한다(+를 빠르게 연달아 눌러도 앞 작업이 끝난 상태를 보고 진행한다).
-  const queues = new Map();
-  function serial(repo, fn) {
-    const prev = queues.get(repo) || Promise.resolve();
-    const run = prev.catch(() => {}).then(fn);
-    queues.set(repo, run);
-    return run;
-  }
-
-  function stageItems(repo, list, withContents) {
-    return serial(repo, () => doStage(repo, list, withContents));
-  }
-
-  function unstageItems(repo, list) {
-    return serial(repo, () => doUnstage(repo, list));
-  }
-
-  async function doStage(repo, list, withContents) {
+  async function addItems(repo, list, withContents) {
     if (list.length === 0) return vscode.window.showWarningMessage(t('noSelection'));
-    if (withContents === undefined) withContents = await chooseContents(list);
-    if (withContents === undefined) return;
     await repo.refresh();
 
     const ignoredSel = list.filter((p) => repo.statusOf(p) === 'I');
     if (ignoredSel.length) {
-      vscode.window.showInformationMessage(t('stageIgnoredSkipped', ignoredSel.map((p) => path.basename(p)).join(', ')));
+      vscode.window.showInformationMessage(t('addIgnoredSkipped', ignoredSel.map((p) => path.basename(p)).join(', ')));
       list = list.filter((p) => !ignoredSel.includes(p));
       if (list.length === 0) return;
     }
 
-    const parents = newParents(repo, list).filter((p) => !repo.isStaged(p));
-    if (parents.length) {
-      const detail = parents.map((p) => path.relative(repo.folder, p) || p).join('\n');
-      if (!(await confirm(t('stageParentsAsk', parents.length), t('stageParentsYes'), detail))) return;
-    }
-
-    // 0) svn 없이 이름을 바꾼 항목이면 새 파일로 추가할지, SVN 이름 바꾸기로 적용할지 묻는다.
+    // svn 없이 이름을 바꾼 항목이면 새 파일로 추가할지, SVN 이름 바꾸기로 적용할지 묻는다.
     const renamed = list.map((p) => repo.renameOf(p)).filter(Boolean);
     if (renamed.length) {
       const apply = t('renameDetectedApply');
@@ -525,62 +434,28 @@ function createCommands(ctx) {
       if (pick === apply) {
         for (const r of renamed) await applyRename(repo, r);
         await repo.refresh();
+        list = list.filter((p) => !renamed.some((r) => key(r.to) === key(p)));
       } else {
         renamed.forEach((r) => repo.forgetRename(r.to));
       }
     }
 
-    // 1) 미등록 항목은 추가한다. 폴더는 하위 포함 여부에 따라 깊이를 정한다. --parents로 미등록 상위 폴더도 함께(폴더 자신만).
-    //    이미 관리 중인 폴더를 하위 포함으로 고르면 그 안의 미등록 항목도 추가한다(git add 폴더와 같다).
-    //    관리 중인 폴더는 폴더째 svn add --force 하지 않는다 — keep-local로 삭제 예약한(D) 항목까지 다시 추가돼 교체(R)가 된다.
-    //    status에 미등록(?)으로 나온 항목만 골라 넘긴다. 충돌 부산물(파일.mine 등)은 뺀다.
+    // 미등록 항목을 추가한다. 폴더는 하위 포함 여부에 따라 깊이를 정한다. --parents로 미등록 상위 폴더도 함께(폴더 자신만).
+    // 이미 관리 중인 폴더를 하위 포함으로 고르면 그 안의 미등록 항목도 추가한다.
+    // 관리 중인 폴더는 폴더째 svn add --force 하지 않는다 — keep-local로 삭제 예약한(D) 항목까지 다시 추가돼 교체(R)가 된다.
+    // status에 미등록(?)으로 나온 항목만 골라 넘긴다. 충돌 부산물(파일.mine 등)은 뺀다.
     list = list.filter((p) => !repo.isLeftover(p));
     const toAdd = list.filter((p) => repo.isUnversioned(p));
     const versionedDirs = withContents ? list.filter((p) => !toAdd.includes(p) && isDir(p)) : [];
     const inside = [...repo.statuses.values()]
       .filter((s) => s.code === '?' && versionedDirs.some((d) => isInside(s.path, d)) && !repo.isLeftover(s.path))
       .map((s) => s.path);
+    if (toAdd.length + inside.length === 0) return vscode.window.showInformationMessage(t('addNothing'));
+    // svn은 이름을 직접 준 항목이면 무시 규칙에 걸려 있어도 추가한다. --no-ignore를 붙이면 폴더 안의 무시 대상까지 추가된다.
     const depth = withContents ? [] : ['--depth', 'empty'];
     if (toAdd.length) await step('add', () => svn.exec(['add', ...depth, '--force', '--parents', ...toAdd], repo.folder));
     if (inside.length) await step('add', () => svn.exec(['add', '--force', ...inside], repo.folder));
-    // 2) 누락 파일은 삭제로 예약한다(그래야 커밋된다).
-    const missing = list.filter((p) => repo.statusOf(p) === '!');
-    if (missing.length) await step('delete', () => svn.exec(['delete', ...missing], repo.folder));
-    await repo.refresh();
-
-    // 3) 스테이징할 경로: 고른 항목, 하위 포함 폴더의 변경 전부, 상위 폴더.
-    const set = new Map();
-    for (const p of [...parents, ...list]) set.set(key(p), p);
-    if (withContents) for (const p of list) if (isDir(p)) for (const c of changedInside(repo, p)) set.set(key(c), c);
-    // 이동이면 반대쪽도 함께 스테이징한다(한쪽만으로는 커밋이 거부된다).
-    const stageable = closure(repo, [...set.values()], false).filter((p) => {
-      const code = repo.statusOf(p);
-      return repo.contains(p) && code && !['?', 'I', 'C', '~', 'N'].includes(code);
-    });
-    if (stageable.length === 0) return vscode.window.showInformationMessage(t('stageNothing'));
-    repo.stage(stageable);
-    vscode.window.setStatusBarMessage(t('stageDone', stageable.length), 3000);
-  }
-
-  // 스테이징 취소: 새로 추가한(A) 항목은 추가도 취소하고(svn revert, 파일은 남음), 그 밖의 항목은 스테이징만 뺀다.
-  // 폴더를 고르면 그 아래 스테이징된 항목 전부가 대상이다.
-  async function doUnstage(repo, list) {
-    await repo.refresh();
-    const inList = repo.stagedPaths().filter((s) => list.some((p) => isInside(s, p)));
-    const all = closure(repo, inList, false).filter((p) => repo.isStaged(p));
-    if (all.length === 0) return vscode.window.showInformationMessage(t('unstageNothing'));
-    // 일반 add는 add 취소(svn revert, 파일은 남음). 폴더는 하위 add까지 함께 취소된다(svn이 자식 없이 폴더만 되돌리지 못한다).
-    // 복사·이동으로 들어온 항목(A +)은 revert하면 파일이 지워지므로 스테이징만 뺀다. 그런 항목을 품은 새 폴더는 add 취소를 거부한다.
-    const isAddedEntry = (p) => { const e = repo.entry(p); return !!e && isPlainAdd(e); };
-    const hasCopiedInside = (dir) => [...repo.statuses.values()].some((s) => s.copied && isInside(s.path, dir));
-    const blocked = all.filter((p) => isAddedEntry(p) && hasCopiedInside(p));
-    if (blocked.length) vscode.window.showWarningMessage(t('unstageBlockedCopied', blocked.map((p) => path.basename(p)).join(', ')));
-    const listed = all.filter((p) => !blocked.some((b) => isInside(p, b)));
-    const added = listed.filter(isAddedEntry);
-    if (listed.length === 0) return;
-    repo.unstage(listed);
-    if (added.length) await step('revert', () => svn.exec(['revert', '--depth', 'infinity', ...added], repo.folder));
-    vscode.window.setStatusBarMessage(added.length ? t('unstageDoneAdded', listed.length, added.length) : t('unstageDone', listed.length), 3000);
+    vscode.window.setStatusBarMessage(t('addDone', toAdd.length + inside.length), 3000);
   }
 
   // 탐색기·패널 인자에서 저장소와 경로를 꺼낸다(패널 그룹 버튼이면 그 그룹의 항목 전부).
@@ -649,17 +524,50 @@ function createCommands(ctx) {
       vscode.window.showWarningMessage(t('mergeEditorFailed'));
       return;
     }
-    // 병합 편집기의 [병합 완료] 버튼은 git만 붙일 수 있다(제안 API). 해결 표시는 이 알림 버튼으로 한다.
+    // 병합 편집기의 [병합 완료] 버튼은 git만 붙일 수 있다(제안 API). 해결 표시는 이 알림과, 알림이 묻혀도 보이는
+    // 상태 표시줄·편집기 제목줄 버튼(markResolved, extension.js)으로 한다.
     const done = t('mergeMarkResolved');
-    for (;;) {
-      if (await vscode.window.showInformationMessage(t('mergeEditorOpened', name), done) !== done) return;
-      const doc = vscode.workspace.textDocuments.find((d) => d.uri.scheme === 'file' && key(d.uri.fsPath) === key(file));
-      if (doc && doc.isDirty) await doc.save();
-      if (!conflict.hasMarkers(fs.readFileSync(file, 'utf8'))
-        || await confirm(t('mergeMarkersLeft', name), t('mergeResolveAnyway'))) break;
-    }
+    if (await vscode.window.showInformationMessage(t('mergeEditorOpened', name), done) === done) await markResolvedFile(repo, file);
+  }
+
+  // 저장 안 했으면 저장하고, 충돌 표시가 남았으면 한 번 더 묻고, svn resolve --accept working.
+  async function markResolvedFile(repo, file) {
+    const name = path.basename(file);
+    const doc = vscode.workspace.textDocuments.find((d) => d.uri.scheme === 'file' && key(svn.realPath(d.uri.fsPath)) === key(file));
+    if (doc && doc.isDirty) await doc.save();
+    if (conflict.hasMarkers(fs.readFileSync(file, 'utf8')) && !(await confirm(t('mergeMarkersLeft', name), t('mergeResolveAnyway')))) return;
     await step('resolve', () => svn.exec(['resolve', '--accept', 'working', file], repo.folder));
     vscode.window.showInformationMessage(t('resolveDone'));
+  }
+
+  // 지금 보고 있는 파일. 병합 편집기 탭이면 결과 파일(TabInputTextMerge.result).
+  function activeFileUri() {
+    const tab = vscode.window.tabGroups.activeTabGroup.activeTab;
+    const input = tab && tab.input;
+    if (input instanceof vscode.TabInputTextMerge) return input.result;
+    if (input instanceof vscode.TabInputText) return input.uri;
+    const editor = vscode.window.activeTextEditor;
+    return editor && editor.document.uri;
+  }
+
+  // 모든 작업 폴더의 충돌 파일에서 고른다(여러 개 가능, 한 저장소 안에서). 없으면 알리고 undefined.
+  async function pickConflicts() {
+    const items = [];
+    for (const r of ctx.repositories()) {
+      await r.refresh();
+      for (const s of r.statuses.values()) {
+        if (!isConflict(s.code)) continue;
+        items.push({ label: path.basename(s.path), description: path.relative(r.folder, path.dirname(s.path)) || r.name, repo: r, path: s.path });
+      }
+    }
+    if (items.length === 0) {
+      vscode.window.showInformationMessage(t('resolveNoConflicts'));
+      return undefined;
+    }
+    const picks = items.length === 1 ? items : await vscode.window.showQuickPick(items, { title: t('resolvePickTitle'), canPickMany: true });
+    if (!picks || picks.length === 0) return undefined;
+    const repo = picks[0].repo;
+    return { repo, files: picks.filter((p) => p.repo === repo).map((p) => p.path) };
   }
 
   // 로컬 미등록 파일 + 서버에서 추가된 같은 이름 파일(conflict.isLocalAdd)
@@ -906,42 +814,19 @@ function createCommands(ctx) {
 
     refresh: command(async () => ctx.rescanAll()),
 
-    // 패널 ✓ / Ctrl+Enter. 스테이징된 것만 커밋한다. 스테이징이 비었으면 git처럼 "모두 스테이징하고 커밋할지" 묻는다
-    // (svnTools.commit.smartCommit: ask / always / never).
+    // 패널 ✓ / 팔레트: 커밋 탭을 연다(변경 전부 체크).
     commitAll: command(async (sc) => {
       const repo = await pickRepo([sc]);
       if (!repo) return;
-      await repo.refresh();
-      // 커밋할 것이 하나도 없으면 확인 창을 거치지 않고 바로 알린다(미등록 항목은 커밋 대상이 아니다).
-      if (!repo.stagedPaths().length && ![...repo.statuses.values()].some((s) => s.code !== '?')) {
-        return vscode.window.showInformationMessage(t('commitNothing'));
-      }
-      if (!repo.stagedPaths().length) {
-        const config = vscode.workspace.getConfiguration('svnTools');
-        let mode = config.get('commit.smartCommit', 'ask');
-        if (mode === 'ask') {
-          const yes = t('noStagedYes');
-          const always = t('noStagedAlways');
-          const never = t('noStagedNever');
-          const pick = await vscode.window.showWarningMessage(t('noStagedAsk'), { modal: true }, yes, always, never);
-          if (!pick) return;
-          if (pick === always) await config.update('commit.smartCommit', 'always', vscode.ConfigurationTarget.Global);
-          if (pick === never) {
-            await config.update('commit.smartCommit', 'never', vscode.ConfigurationTarget.Global);
-            tellSettingOff('svnTools.commit.smartCommit');
-          }
-          mode = pick === never ? 'never' : 'always';
-        }
-        if (mode === 'never') return vscode.window.showInformationMessage(t('noStagedInfo'));
-        // 변경을 모두 스테이징한다(미등록·충돌·덜 받은 항목은 빼고). 커밋은 이어서 같은 흐름으로 한다.
-        const changes = [...repo.statuses.values()].filter((s) => !['?', 'C', '~', 'N'].includes(s.code)).map((s) => s.path);
-        if (changes.length === 0) return vscode.window.showInformationMessage(t('commitNothing'));
-        repo.stage(closure(repo, changes, false).filter((p) => repo.contains(p)));
-      }
-      await commitStaged(repo, repo.sourceControl.inputBox.value);
+      await openCommit(repo);
     }),
 
-    commit: command(async (...args) => quickCommit(args)),
+    // 탐색기 SVN ▸ Commit…: 고른 것(폴더면 그 안의 것)만 체크한 커밋 탭을 연다.
+    commit: command(async (...args) => {
+      const list = paths(args);
+      const repo = repoOfArgs(args, list);
+      if (repo) await openCommit(repo, list.length ? list : undefined);
+    }),
 
     update: command(async (...args) => {
       const list = paths(args);
@@ -993,8 +878,8 @@ function createCommands(ctx) {
     }),
 
     // 그룹의 항목은 svn status가 하나씩 나열한 것이라 각자 자기만 되돌린다(--depth empty). 그래야 속성만 바뀐 폴더를 되돌릴 때
-    // 그 아래 스테이징된 수정까지 날아가지 않는다. 단 추가·교체·삭제된 폴더는 svn이 자식 없이 되돌리지 못해(E155038)
-    // 폴더째(infinity) 되돌린다 — 그 아래 스테이징된 항목이 있으면 확인 창에 알린다. 이동은 양쪽을 함께 되돌린다.
+    // 그 아래 수정까지 날아가지 않는다. 단 추가·교체·삭제된 폴더는 svn이 자식 없이 되돌리지 못해(E155038) 폴더째(infinity)
+    // 되돌린다. 이동은 양쪽을 함께 되돌린다.
     revertAll: command(async (group) => {
       const list = (group && group.resourceStates ? group.resourceStates : []).map((s) => svn.realPath(s.resourceUri.fsPath));
       if (list.length === 0) return;
@@ -1004,53 +889,45 @@ function createCommands(ctx) {
       const targets = closure(repo, list, false);
       const deep = targets.filter((p) => ['A', 'R', 'D'].includes(repo.statusOf(p)) && (isDir(p) || repo.statusOf(p) === 'D'));
       const shallow = targets.filter((p) => !deep.includes(p));
-      const listed = new Set(list.map(key));
-      const targetKeys = new Set(targets.map(key));
-      const hit = repo.stagedPaths().filter((s) => deep.some((d) => isInside(s, d)) && !targetKeys.has(key(s)));
-      // 이동 짝으로 함께 되돌리는 항목 중 스테이징된 것(다른 그룹에 있어 이 목록에는 안 보인다)
-      const pairedStaged = targets.filter((p) => !listed.has(key(p)) && repo.isStaged(p));
-      const notes = [hit.length && t('revertAllStagedNote', hit.length), pairedStaged.length && t('revertAllPairStaged', pairedStaged.length)];
-      const detail = notes.filter(Boolean).join('\n') || undefined;
-      if (!(await confirm(t('revertAllAsk', list.length), t('revertYes'), detail))) return;
+      if (!(await confirm(t('revertAllAsk', list.length), t('revertYes')))) return;
       if (deep.length) await step('revert', () => svn.exec(['revert', '--depth', 'infinity', ...deep], repo.folder));
       if (shallow.length) await step('revert', () => svn.exec(['revert', '--depth', 'empty', ...shallow], repo.folder));
     }),
 
-    // 새 파일 추가 = add 후 스테이징(파일 하나는 바로, 폴더는 하위 포함·제외를 메뉴에서 고른다).
-    add: command(async (...args) => { const { repo, list } = repoAndPaths(args); if (repo) await stageItems(repo, list, true); }),
-    addInclude: command(async (...args) => { const { repo, list } = repoAndPaths(args); if (repo) await stageItems(repo, list, true); }),
-    addExclude: command(async (...args) => { const { repo, list } = repoAndPaths(args); if (repo) await stageItems(repo, list, false); }),
+    // 새 파일 추가(파일 하나는 바로, 폴더는 하위 포함·제외를 메뉴에서 고른다). 패널 +는 하위 포함.
+    add: command(async (...args) => { const { repo, list } = repoAndPaths(args); if (repo) await addItems(repo, list, true); }),
+    addInclude: command(async (...args) => { const { repo, list } = repoAndPaths(args); if (repo) await addItems(repo, list, true); }),
+    addExclude: command(async (...args) => { const { repo, list } = repoAndPaths(args); if (repo) await addItems(repo, list, false); }),
 
-    // 수정된 파일 스테이징. 패널 + 버튼(stage)은 폴더가 섞여 있으면 하위 포함 여부를 묻는다.
-    stage: command(async (...args) => { const { repo, list } = repoAndPaths(args); if (repo) await stageItems(repo, list, undefined); }),
-    stageInclude: command(async (...args) => { const { repo, list } = repoAndPaths(args); if (repo) await stageItems(repo, list, true); }),
-    stageExclude: command(async (...args) => { const { repo, list } = repoAndPaths(args); if (repo) await stageItems(repo, list, false); }),
-    unstage: command(async (...args) => { const { repo, list } = repoAndPaths(args); if (repo) await unstageItems(repo, list); }),
-
-    // 패널 그룹 버튼. Changes의 항목은 하나씩 나열돼 있어 그대로, Unversioned의 폴더는 하위 포함으로 추가한다.
-    // 명령 팔레트에서는 그룹 없이 들어온다: Stage All은 Changes와 Unversioned 전부, Unstage All은 스테이징 전부.
-    stageAll: command(async (group) => {
-      if (!(group && group.resourceStates)) {
-        const repo = await pickRepo([]);
-        if (!repo) return;
-        const all = [...repo.changes.resourceStates, ...repo.unversioned.resourceStates].map((s) => svn.realPath(s.resourceUri.fsPath));
-        if (all.length) await stageItems(repo, all, true);
+    // 추가 취소(사용자 요청): 일반 add만 svn revert로 되돌린다. 파일은 남고 다시 미등록이 된다.
+    // 새 폴더는 안의 add도 함께 취소된다(svn이 자식 없이 폴더만 되돌리지 못한다, E155038).
+    // 복사·이동으로 생긴 A(+)는 revert하면 작업 파일이 지워지므로 빼고, 그런 항목을 품은 새 폴더도 뺀다.
+    undoAdd: command(async (...args) => {
+      const { repo, list } = repoAndPaths(args);
+      if (!repo) return;
+      await repo.refresh();
+      const plain = list.filter((p) => { const e = repo.entry(p); return !!e && isPlainAdd(e); });
+      const hasCopied = (dir) => [...repo.statuses.values()].some((s) => s.copied && isInside(s.path, dir));
+      const blocked = plain.filter(hasCopied);
+      if (blocked.length) vscode.window.showWarningMessage(t('undoAddBlockedCopied', blocked.map((p) => path.basename(p)).join(', ')));
+      const targets = plain.filter((p) => !blocked.includes(p));
+      if (targets.length === 0) {
+        if (!blocked.length) vscode.window.showInformationMessage(t('undoAddNone'));
         return;
       }
-      const list = group.resourceStates.map((s) => svn.realPath(s.resourceUri.fsPath));
-      if (list.length === 0) return;
-      const repo = repoFor(list[0]);
-      if (repo) await stageItems(repo, list, group.id === 'unversioned');
-    }),
-    unstageAll: command(async (group) => {
-      const repo = group && group.resourceStates ? undefined : await pickRepo([]);
-      const states = repo ? repo.stagedGroup.resourceStates : (group && group.resourceStates) || [];
-      const list = states.map((s) => svn.realPath(s.resourceUri.fsPath));
-      if (list.length === 0) return;
-      const target = repo || repoFor(list[0]);
-      if (target) await unstageItems(target, list);
+      await step('revert', () => svn.exec(['revert', '--depth', 'infinity', ...targets], repo.folder));
+      vscode.window.setStatusBarMessage(t('undoAddDone', targets.length), 3000);
     }),
 
+    // 미등록 그룹 버튼. 팔레트에서는 그룹 없이 들어와 저장소를 고른다.
+    addAll: command(async (group) => {
+      const repo = group && group.resourceStates ? undefined : await pickRepo([]);
+      const states = repo ? repo.unversioned.resourceStates : (group && group.resourceStates) || [];
+      const list = states.map((s) => svn.realPath(s.resourceUri.fsPath));
+      if (list.length === 0) return vscode.window.showInformationMessage(t('addNothing'));
+      const target = repo || repoFor(list[0]);
+      if (target) await addItems(target, list, true);
+    }),
 
     deleteKeepLocal: command(async (...args) => deleteItems(args, true)),
     deleteLocal: command(async (...args) => deleteItems(args, false)),
@@ -1208,12 +1085,41 @@ function createCommands(ctx) {
       await showLog(uri);
     }),
 
-    resolve: command(async (...args) => {
-      const list = paths(args);
-      if (list.length === 0) return vscode.window.showWarningMessage(t('noSelection'));
-      const repo = repoFor(list[0]);
+    // 해결됨으로 표시: 상태 표시줄·편집기 제목줄 버튼(인자 uri), 팔레트(인자 없음 → 지금 보고 있는 파일, 병합 편집기면 결과 파일).
+    markResolved: command(async (arg) => {
+      const uri = arg instanceof vscode.Uri ? arg : activeFileUri();
+      if (!uri || uri.scheme !== 'file') return vscode.window.showInformationMessage(t('resolveNone'));
+      const p = svn.realPath(uri.fsPath);
+      const repo = repoFor(p);
       if (!repo) return;
-      const conflicted = list.filter((p) => ['C', '~'].includes(repo.statusOf(p)));
+      await repo.refresh();
+      if (!isConflict(repo.statusOf(p))) return vscode.window.showInformationMessage(t('resolveNone'));
+      await markResolvedFile(repo, p);
+    }),
+
+    // 지금 보고 있는 파일(병합 편집기면 결과 파일)이 충돌 중이면 그 파일 경로. 상태 표시줄 버튼에 쓴다(extension.js).
+    activeConflict: () => {
+      const uri = activeFileUri();
+      if (!uri || uri.scheme !== 'file') return undefined;
+      const repo = ctx.repositories().find((r) => r.contains(uri.fsPath));
+      return repo && isConflict(repo.statusOf(uri.fsPath)) ? uri : undefined;
+    },
+
+    // 명령 팔레트에서는 인자 없이 들어온다: 열린 편집기 파일이 충돌이면 그 파일, 아니면 충돌 파일 목록에서 고른다.
+    resolve: command(async (...args) => {
+      const fromPalette = !args[0];
+      const list = paths(args);
+      let repo = list.length ? ctx.repositories().find((r) => r.contains(list[0])) : undefined;
+      if (!repo && !fromPalette) return list.length ? repoFor(list[0]) : vscode.window.showWarningMessage(t('noSelection'));
+      // 부산물(파일.mine, 파일.r12)을 골랐으면 원래 충돌 파일로 바꾼다
+      const owners = repo ? list.map((p) => repo.leftoverOwner(p) || p) : [];
+      let conflicted = [...new Map(owners.map((p) => [key(p), p])).values()].filter((p) => isConflict(repo.statusOf(p)));
+      if (conflicted.length === 0 && fromPalette) {
+        const picked = await pickConflicts();
+        if (!picked) return;
+        ({ repo, files: conflicted } = picked);
+      }
+      use(repo);
       if (conflicted.length === 0) return vscode.window.showInformationMessage(t('resolveNone'));
       const details = await conflict.read(conflicted, repo.folder);
       if (details.every(conflict.isLocalAdd)) return resolveLocalAdd(conflicted, repo);

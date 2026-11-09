@@ -155,7 +155,25 @@ function createRepo() {
     const st = svn.parseStatus((await svn.exec(['status', '--xml', emptyDir], wc)).stdout);
     return st.map((e) => `${e.item}:${path.basename(e.path)}`).sort().join(',');
   }, 'added:빈 등록 폴더,added:안의 파일.txt');
-  // 스테이징 커밋의 핵심: --depth empty로 "새 폴더 + 고른 파일"만 정확히 올리고 같은 폴더의 다른 새 파일은 남긴다.
+  // 커밋 탭에서 미등록 폴더를 체크하면: add --force --parents(안쪽은 무시 규칙을 따름) 뒤, 폴더와 안의 새 항목을 --depth empty로 커밋한다.
+  // 폴더만 넘기면 안의 항목이 빠진다(commands.js openCommit의 changedInside).
+  const tabDir = path.join(wc, '탭 새 폴더');
+  fs.mkdirSync(path.join(tabDir, '안쪽'), { recursive: true });
+  fs.writeFileSync(path.join(tabDir, '안쪽', '파일 하나.txt'), 'a');
+  fs.writeFileSync(path.join(tabDir, '빠질 것.log'), 'l');
+  await check('미등록 폴더 add 후 폴더+안의 항목 정확 커밋', async () => {
+    await ignore.setProp('svn:global-ignores', wc, ['*.log']);
+    await svn.exec(['add', '--force', '--parents', tabDir], wc);
+    const added = svn.parseStatus((await svn.exec(['status', '--xml', tabDir], wc)).stdout)
+      .filter((e) => e.item === 'added').map((e) => e.path);
+    await svn.exec(['commit', '-m', '탭 커밋', '--force-log', '--depth', 'empty', ...added], wc);
+    await ignore.setProp('svn:global-ignores', wc, []);
+    const left = svn.parseStatus((await svn.exec(['status', '--xml', '--no-ignore', tabDir], wc)).stdout);
+    return `${added.length}:` + left.map((e) => `${e.item}:${path.basename(e.path)}`).join(',');
+  }, '3:unversioned:빠질 것.log');
+  await svn.exec(['revert', '--depth', 'empty', wc], wc);
+
+  // --depth empty로 "새 폴더 + 고른 파일"만 정확히 올리고 같은 폴더의 다른 새 파일은 남긴다.
   // 새 폴더 안의 파일만 넘기면 svn이 거부한다(E200009) — 그래서 상위 새 폴더를 함께 넣는다(commands.js newParents).
   const stageDir = path.join(wc, '스테이징 폴더');
   fs.mkdirSync(stageDir);
@@ -250,7 +268,7 @@ function createRepo() {
     await svn.exec(['unlock', keep], wc);
     return `${e && e.item}:${e && e.lockToken}`;
   }, 'normal:true');
-  // 일반 add 폴더는 자식 add 없이 혼자 되돌릴 수 없다(E155038) — 스테이징 취소·Revert All이 폴더는 infinity로 되돌리는 이유.
+  // 일반 add 폴더는 자식 add 없이 혼자 되돌릴 수 없다(E155038) — 추가 취소·Revert All이 폴더는 infinity로 되돌리는 이유.
   await check('A 폴더 revert --depth empty는 거부', async () => {
     const nd = path.join(mv, '새 폴더');
     fs.mkdirSync(nd);
@@ -263,6 +281,14 @@ function createRepo() {
       return /E155038/.test(e.stderr) ? 'E155038' : (e.stderr || e.message).split(/\r?\n/)[0];
     }
   }, 'E155038');
+  // 추가 취소(commands.js undoAdd): infinity로 되돌리면 폴더와 안의 add가 함께 취소되고 파일은 남는다.
+  await check('추가 취소 — 파일은 남고 미등록으로', async () => {
+    const nd = path.join(mv, '새 폴더');
+    await svn.exec(['revert', '--depth', 'infinity', nd], wc);
+    const inNd = (p) => p === nd || p.startsWith(nd + path.sep);
+    const st = (await stOf(mv)).filter((x) => inNd(x.path)).map((x) => `${x.item}:${path.basename(x.path)}`);
+    return `${fs.existsSync(path.join(nd, 'x.txt'))}:${st.join(',')}`;
+  }, 'true:unversioned:새 폴더');
   // 충돌(1.3.0): 두 번째 작업 사본으로 서버 변경을 만든다(conflict.js).
   const wc2 = path.join(base, '둘째 사본');
   const cf = path.join(wc, '충돌 검사');
